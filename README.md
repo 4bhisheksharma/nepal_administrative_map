@@ -2,9 +2,12 @@
 
 [![pub package](https://img.shields.io/pub/v/nepal_administrative_map.svg)](https://pub.dev/packages/nepal_administrative_map)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/4bhisheksharma/nepal_administrative_map/blob/main/LICENSE)
+[![live demo](https://img.shields.io/badge/demo-live-brightgreen.svg)](https://4bhisheksharma.github.io/nepal_administrative_map/)
 
 An interactive administrative map of Nepal for Flutter: **7 provinces,
 77 districts and 753 local levels**, in **English and Nepali (नेपाली)**.
+
+**[▶ Try the live demo](https://4bhisheksharma.github.io/nepal_administrative_map/)** in your browser, no install needed.
 
 - **One line to start:** `NepalMap()` works with no setup, no API keys and
   no internet. The data (422 KB) is bundled.

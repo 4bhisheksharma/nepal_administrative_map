@@ -2,6 +2,7 @@
 
 * README: screenshots and links now use absolute GitHub URLs, so they show
   on pub.dev.
+* README: link to the live web demo (https://4bhisheksharma.github.io/nepal_administrative_map/).
 
 ## 0.0.1
 

@@ -1,11 +1,11 @@
 {
-    "name": "nepal_administrative_map_example",
-    "short_name": "nepal_administrative_map_example",
+    "name": "Nepal Administrative Map",
+    "short_name": "Nepal Map",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Interactive, bilingual map of Nepal's provinces, districts and local levels.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

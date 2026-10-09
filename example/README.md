@@ -5,6 +5,8 @@ English / नेपाली, light and dark, bilingual labels, choropleths (are
 number of local levels, local-level types), protected areas, city markers,
 a custom map layer, search, zoom buttons, PNG export and the credit line.
 
+Try it in your browser: **[live demo](https://4bhisheksharma.github.io/nepal_administrative_map/)**, or run it locally:
+
 ```sh
 cd example
 flutter run
