@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nepal_administrative_map/nepal_administrative_map.dart';
-import 'package:nepal_administrative_map/src/rendering/geometry_cache.dart';
-import 'package:nepal_administrative_map/src/rendering/map_plane.dart';
 
 const mapSize = Size(800, 500);
 

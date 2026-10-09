@@ -39,6 +39,7 @@ class RegionState {
     this.isSelected = false,
     this.isHovered = false,
     this.isHighlighted = false,
+    this.value,
   });
 
   /// Whether the region is selected.
@@ -50,15 +51,19 @@ class RegionState {
   /// Whether the region was highlighted with `NepalMapController.highlight`.
   final bool isHighlighted;
 
+  /// The region's value on a choropleth map, or `null` without one.
+  final Object? value;
+
   @override
   bool operator ==(Object other) =>
       other is RegionState &&
       other.isSelected == isSelected &&
       other.isHovered == isHovered &&
-      other.isHighlighted == isHighlighted;
+      other.isHighlighted == isHighlighted &&
+      other.value == value;
 
   @override
-  int get hashCode => Object.hash(isSelected, isHovered, isHighlighted);
+  int get hashCode => Object.hash(isSelected, isHovered, isHighlighted, value);
 }
 
 /// Decides how each region is drawn.

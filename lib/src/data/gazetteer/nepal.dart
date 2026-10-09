@@ -1,4 +1,5 @@
 import '../models/region.dart';
+import 'search.dart';
 
 /// Entry point to Nepal's administrative regions.
 ///
@@ -25,6 +26,17 @@ abstract final class Nepal {
     AdminLevel.district => districts,
     AdminLevel.localLevel => localLevels,
   };
+
+  /// Regions whose names match [query], best first.
+  ///
+  /// Works in English (`'pokh'`, `'Pokhara'`, typos like `'pokahra'`, and
+  /// old spellings like `'Chitawan'`) and Nepali (`'पोख'`, `'पोखरा'`).
+  /// Limit the results to some [levels], and to [limit] regions.
+  static List<Region> search(
+    String query, {
+    Set<AdminLevel>? levels,
+    int limit = 10,
+  }) => RegionSearch.instance.search(query, levels: levels, limit: limit);
 
   /// The province, district or local level with [code], or `null`.
   static Region? byCode(String code) => _regions[code];

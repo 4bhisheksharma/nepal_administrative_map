@@ -43,6 +43,66 @@ void main() {
 
   labelGoldens();
 
+  for (final language in MapLanguage.values) {
+    testWidgets('choropleth ${language.name}', (tester) async {
+      final data = await loadData(tester);
+      // District areas, computed from the boundaries.
+      final areas = {
+        for (final s in data.districts) s.feature as Region: s.areaKm2.round(),
+      };
+      await pumpMap(
+        tester,
+        RepaintBoundary(
+          child: ColoredBox(
+            color: Colors.white,
+            child: NepalMap(
+              level: AdminLevel.district,
+              language: language,
+              labelMode: LabelMode.none,
+              showAttribution: false,
+              choropleth: Choropleth(
+                values: areas,
+                scale: ColorScale.sequential(
+                  Colors.amber.shade50,
+                  Colors.deepOrange.shade800,
+                ),
+                title: const LocalizedName(
+                  'Area (km²)',
+                  'क्षेत्रफल (वर्ग कि.मी.)',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await expectLater(
+        find.byType(RepaintBoundary).first,
+        matchesGoldenFile('images/choropleth_${language.name}.png'),
+      );
+    });
+  }
+
+  testWidgets('protected areas overlay', (tester) async {
+    await pumpMap(
+      tester,
+      const RepaintBoundary(
+        child: ColoredBox(
+          color: Colors.white,
+          child: NepalMap(
+            level: AdminLevel.province,
+            showProtectedAreas: true,
+            labelMode: LabelMode.none,
+            showAttribution: false,
+          ),
+        ),
+      ),
+    );
+    await expectLater(
+      find.byType(RepaintBoundary).first,
+      matchesGoldenFile('images/protected_areas.png'),
+    );
+  });
+
   testWidgets('scope gandaki', (tester) async {
     await pumpMap(
       tester,

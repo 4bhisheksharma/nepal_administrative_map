@@ -16,13 +16,18 @@ import '../rendering/geometry_cache.dart';
 import '../rendering/layers/border_layer.dart';
 import '../rendering/layers/highlight_layer.dart';
 import '../rendering/layers/label_layer.dart';
+import '../rendering/layers/marker_dot_layer.dart';
+import '../rendering/layers/protected_area_layer.dart';
 import '../rendering/layers/region_fill_layer.dart';
 import '../rendering/map_camera.dart';
 import '../rendering/map_layer.dart';
 import '../rendering/map_plane.dart';
 import '../rendering/style/nepal_map_theme.dart';
 import '../rendering/style/region_style.dart';
+import 'choropleth.dart';
+import 'map_marker.dart';
 import 'nepal_map_controller.dart';
+import 'nepal_map_legend.dart';
 import 'region_tooltip.dart';
 
 /// How tapping regions changes the selection.
@@ -114,6 +119,11 @@ class NepalMap extends StatefulWidget {
     this.showAttribution = true,
     this.onAttributionTap,
     this.dataSource = const AssetMapDataSource(),
+    this.choropleth,
+    this.markers = const [],
+    this.onMarkerTap,
+    this.showProtectedAreas = false,
+    this.extraLayers = const [],
   });
 
   /// Credit line for the boundary data, required by its CC BY 4.0 license.
@@ -126,7 +136,10 @@ class NepalMap extends StatefulWidget {
 
   /// Loads the bundled map data ahead of time, e.g. during a splash screen,
   /// so the first map appears without a loading state.
-  static Future<void> preload({
+  ///
+  /// The result also answers point lookups without a map on screen:
+  /// `(await NepalMap.preload()).localLevelAt(point)`.
+  static Future<NepalMapData> preload({
     MapDataSource source = const AssetMapDataSource(),
   }) => NepalMapData.load(source);
 
@@ -230,6 +243,26 @@ class NepalMap extends StatefulWidget {
   /// Where the boundary data comes from. Defaults to the bundled asset.
   final MapDataSource dataSource;
 
+  /// Colours regions by data, with a legend. Without a [style], regions are
+  /// filled by [Choropleth.scale]; with one, the value arrives in
+  /// [RegionState.value].
+  final Choropleth? choropleth;
+
+  /// Points to show on the map: widgets or painted dots.
+  final List<MapMarker> markers;
+
+  /// Called when a marker is tapped. Marker taps take priority over region
+  /// taps.
+  final ValueChanged<MapMarker>? onMarkerTap;
+
+  /// Whether to overlay the protected areas outside local levels (national
+  /// parks, reserves) with hatching and labels. Off by default.
+  final bool showProtectedAreas;
+
+  /// Your own drawing, painted above the regions and below markers and
+  /// labels. See [MapLayer].
+  final List<MapLayer> extraLayers;
+
   @override
   State<NepalMap> createState() => _NepalMapState();
 }
@@ -266,7 +299,7 @@ class _NepalMapState extends State<NepalMap>
   ({Duration time, Offset position})? _lastTap;
   final _focusNode = FocusNode(debugLabel: 'NepalMap');
 
-  final _recordings = [LayerRecording(), LayerRecording(), LayerRecording()];
+  final _recordings = <LayerRecording>[];
   final _labelCache = LabelCache();
 
   /// Width / height of Nepal, used for sizing before the data has loaded.
@@ -329,6 +362,7 @@ class _NepalMapState extends State<NepalMap>
     for (final r in _recordings) {
       r.dispose();
     }
+    _recordings.clear();
     _labelCache.dispose();
     super.dispose();
   }
@@ -551,6 +585,10 @@ class _NepalMapState extends State<NepalMap>
     }
 
     setState(() => _tooltip = null);
+    if (_dotAt(details.localPosition) case final marker?) {
+      widget.onMarkerTap?.call(marker);
+      return;
+    }
     final region = _regionAt(details.localPosition);
     if (region == null) return;
     widget.onRegionTap?.call(region);
@@ -559,6 +597,25 @@ class _NepalMapState extends State<NepalMap>
       return;
     }
     _applySelection(region);
+  }
+
+  /// The dot marker nearest [position], within its radius plus a margin.
+  MapMarker? _dotAt(Offset position) {
+    final cache = _cache;
+    if (cache == null || widget.onMarkerTap == null) return null;
+    final transform = _transform(cache);
+    MapMarker? best;
+    var bestDistance = double.infinity;
+    for (final m in widget.markers) {
+      if (!m.isDot) continue;
+      final d = (transform.toScreen(cache.plane.project(m.point)) - position)
+          .distance;
+      if (d <= m.radius + 6 && d < bestDistance) {
+        best = m;
+        bestDistance = d;
+      }
+    }
+    return best;
   }
 
   void _applySelection(Region region) {
@@ -751,10 +808,13 @@ class _NepalMapState extends State<NepalMap>
     final language = _language(context);
     final strings = widget.strings ?? NepalMapStrings.of(language);
     final theme = widget.theme ?? NepalMapTheme.of(context);
-    final styleOf = widget.style ?? theme.defaultStyle;
+    final choropleth = widget.choropleth;
+    final styleOf =
+        widget.style ?? choropleth?.defaultStyle(theme) ?? theme.defaultStyle;
     final selection = widget.selected ?? _controller.selection.value;
     final highlighted = _controller.highlighted.value;
     final regions = cache.regions(view);
+    final transform = _transform(cache);
 
     final labelMode =
         widget.labelMode ??
@@ -762,7 +822,7 @@ class _NepalMapState extends State<NepalMap>
     final paintContext = MapPaintContext(
       cache: cache,
       view: view,
-      transform: _transform(cache),
+      transform: transform,
       theme: theme,
       language: language,
       styles: {
@@ -773,6 +833,7 @@ class _NepalMapState extends State<NepalMap>
               isSelected: selection.contains(region),
               isHovered: region == _hovered,
               isHighlighted: highlighted.contains(region),
+              value: choropleth?.values[region],
             ),
           ),
       },
@@ -782,6 +843,16 @@ class _NepalMapState extends State<NepalMap>
             if (_labelText(region, labelMode, language) case final text?)
               region: text,
       },
+      protectedAreaLabels: {
+        if (widget.showProtectedAreas && labelMode != LabelMode.none)
+          for (final area in cache.protectedAreasIn(view.scope))
+            area: switch (labelMode) {
+              LabelMode.both =>
+                '${area.fullName(MapLanguage.en)}\n${area.fullName(MapLanguage.ne)}',
+              LabelMode.ne => area.fullName(MapLanguage.ne),
+              _ => area.fullName(MapLanguage.en),
+            },
+      },
       labelStyle: DefaultTextStyle.of(context).style
           .merge(const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))
           .merge(theme.labelStyle),
@@ -789,20 +860,46 @@ class _NepalMapState extends State<NepalMap>
 
     final layers = <MapLayer>[
       const RegionFillLayer(),
+      if (widget.showProtectedAreas) const ProtectedAreaLayer(),
       const BorderLayer(),
       const HighlightLayer(),
+      ...widget.extraLayers,
+      if (widget.markers.any((m) => m.isDot))
+        MarkerDotLayer(widget.markers, Theme.of(context).colorScheme.primary),
       LabelLayer(_labelCache),
     ];
+    while (_recordings.length < layers.length) {
+      _recordings.add(LayerRecording());
+    }
+
     Widget map = Stack(
       fit: StackFit.expand,
       children: [
         for (final (i, layer) in layers.indexed)
           RepaintBoundary(
             child: CustomPaint(
-              painter: MapLayerPainter(
-                layer,
-                paintContext,
-                i < _recordings.length ? _recordings[i] : LayerRecording(),
+              painter: MapLayerPainter(layer, paintContext, _recordings[i]),
+            ),
+          ),
+        for (final marker in widget.markers)
+          if (!marker.isDot)
+            ?_positioned(
+              marker,
+              transform.toScreen(cache.plane.project(marker.point)),
+              size,
+            ),
+        if (choropleth != null && choropleth.showLegend)
+          Align(
+            alignment: choropleth.legendAlignment,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+              child: NepalMapLegend.of(
+                choropleth,
+                language: language,
+                showNoData: regions.any(
+                  (r) => !choropleth.values.containsKey(r),
+                ),
+                noDataColor: theme.noDataFill,
               ),
             ),
           ),
@@ -812,7 +909,15 @@ class _NepalMapState extends State<NepalMap>
               delegate: RegionTooltipPositionDelegate(tip.anchor),
               child:
                   widget.tooltipBuilder?.call(context, tip.region, language) ??
-                  RegionTooltip(region: tip.region, language: language),
+                  RegionTooltip(
+                    region: tip.region,
+                    language: language,
+                    value: switch (choropleth?.values[tip.region]) {
+                      final v? => choropleth!.format(v, language),
+                      null => null,
+                    },
+                    valueLabel: choropleth?.title?.of(language),
+                  ),
             ),
           ),
         if (widget.showAttribution)
@@ -858,6 +963,27 @@ class _NepalMapState extends State<NepalMap>
           ),
         ),
       ),
+    );
+  }
+
+  /// A widget marker positioned so its [MapMarker.alignment] point sits on
+  /// [screen], or `null` if it's off the map.
+  Widget? _positioned(MapMarker marker, Offset screen, Size size) {
+    final left = screen.dx - marker.size.width * (marker.alignment.x + 1) / 2;
+    final top = screen.dy - marker.size.height * (marker.alignment.y + 1) / 2;
+    final rect = Rect.fromLTWH(
+      left,
+      top,
+      marker.size.width,
+      marker.size.height,
+    );
+    if (!rect.overlaps(Offset.zero & size)) return null;
+    final onTap = widget.onMarkerTap;
+    return Positioned.fromRect(
+      rect: rect,
+      child: onTap == null
+          ? marker.child!
+          : GestureDetector(onTap: () => onTap(marker), child: marker.child),
     );
   }
 

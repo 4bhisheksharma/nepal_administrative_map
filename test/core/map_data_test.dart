@@ -99,6 +99,50 @@ void main() {
       expect(data.protectedAreaAt(madi), isNull);
     });
 
+    test('22 towns resolve to their local levels', () {
+      const towns = [
+        (LatLng(27.7043, 85.3070), LocalLevel.kathmandu),
+        (LatLng(27.6727, 85.3253), LocalLevel.lalitpur),
+        (LatLng(27.6721, 85.4281), LocalLevel.bhaktapur),
+        (LatLng(28.2156, 83.9450), LocalLevel.pokhara),
+        (LatLng(26.4525, 87.2718), LocalLevel.biratnagar),
+        (LatLng(27.0104, 84.8770), LocalLevel.birgunj),
+        (LatLng(27.6833, 84.4333), LocalLevel.bharatpur),
+        (LatLng(27.7006, 83.4483), LocalLevel.butwal),
+        (LatLng(28.0500, 81.6167), LocalLevel.nepalgunj),
+        (LatLng(28.6833, 80.6000), LocalLevel.dhangadhi),
+        (LatLng(26.8125, 87.2836), LocalLevel.dharan),
+        (LatLng(27.4167, 85.0333), LocalLevel.hetauda),
+        (LatLng(26.7288, 85.9263), LocalLevel.janakpur),
+        (LatLng(26.6646, 87.2718), LocalLevel.itahari),
+        (LatLng(28.0333, 82.4833), LocalLevel.ghorahi),
+        (LatLng(28.1306, 82.2972), LocalLevel.tulsipur),
+        (LatLng(28.6019, 81.6339), LocalLevel.birendranagar),
+        (LatLng(28.9634, 80.1781), LocalLevel.bhimdatta),
+        (LatLng(26.6595, 87.6983), LocalLevel.damak),
+        (LatLng(28.0000, 84.6333), LocalLevel.gorkha),
+        (
+          LatLng(27.8069, 86.7140),
+          LocalLevel.khumbupasanglahmu,
+        ), // Namche Bazaar
+        (LatLng(28.7804, 83.7220), LocalLevel.gharapjhong), // Jomsom
+      ];
+      for (final (point, expected) in towns) {
+        expect(data.localLevelAt(point), expected, reason: '$point');
+        expect(data.districtAt(point), expected.district);
+        expect(data.provinceAt(point), expected.province);
+      }
+    });
+
+    test('areas match official figures within 1%', () {
+      final total = data.districts.fold(0.0, (sum, s) => sum + s.areaKm2);
+      expect(total, closeTo(147516, 147516 * 0.01));
+      expect(
+        data.shapeOf(District.kathmandu).areaKm2,
+        closeTo(413, 413 * 0.01),
+      );
+    });
+
     test('matches a brute-force search for 1,000 random points', () {
       final random = math.Random(42);
       final b = data.bounds;

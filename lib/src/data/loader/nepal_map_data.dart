@@ -32,6 +32,11 @@ class MapShape<T> {
   /// Bounding box in degrees (x = longitude, y = latitude).
   final Bounds bounds;
 
+  /// Area in square kilometres, measured on the sphere from the simplified
+  /// boundary (within about 1% of official figures).
+  double get areaKm2 =>
+      polygons.fold(0.0, (sum, p) => sum + geodesicArea(p)) / 1e6;
+
   /// Whether [point] lies inside this shape.
   bool contains(LatLng point) =>
       bounds.contains(point.longitude, point.latitude) &&
@@ -196,6 +201,19 @@ final class NepalMapData {
     }
     return null;
   }
+
+  /// The province containing [point], or `null` outside Nepal.
+  Province? provinceAt(LatLng point) =>
+      regionAt(point, AdminLevel.province) as Province?;
+
+  /// The district containing [point], or `null` outside Nepal.
+  District? districtAt(LatLng point) =>
+      regionAt(point, AdminLevel.district) as District?;
+
+  /// The local level containing [point], or `null` outside Nepal or inside a
+  /// protected area (see [protectedAreaAt]).
+  LocalLevel? localLevelAt(LatLng point) =>
+      regionAt(point, AdminLevel.localLevel) as LocalLevel?;
 
   /// The protected area containing [point], if any.
   ProtectedArea? protectedAreaAt(LatLng point) {

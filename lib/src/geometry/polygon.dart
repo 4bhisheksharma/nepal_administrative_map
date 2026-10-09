@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 // Helpers for rings stored as interleaved `[x0, y0, x1, y1, …]` coordinates.
@@ -54,3 +55,30 @@ bool polygonContains(List<Float64List> rings, double x, double y) {
   }
   return inside;
 }
+
+/// Earth's radius used for areas, in metres (WGS84 equatorial).
+const double earthRadiusMeters = 6378137;
+
+/// Area of a polygon on the sphere, in square metres, for rings given as
+/// interleaved `[lng, lat, …]` degrees. The outer ring minus its holes.
+double geodesicArea(List<Float64List> rings) {
+  double ring(Float64List r) {
+    var sum = 0.0;
+    const toRad = 3.141592653589793 / 180;
+    for (var i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+      sum +=
+          (r[i] - r[j]) *
+          toRad *
+          (2 + _sin(r[j + 1] * toRad) + _sin(r[i + 1] * toRad));
+    }
+    return (sum * earthRadiusMeters * earthRadiusMeters / 2).abs();
+  }
+
+  var area = ring(rings.first);
+  for (final hole in rings.skip(1)) {
+    area -= ring(hole);
+  }
+  return area;
+}
+
+double _sin(double x) => math.sin(x);

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:nepal_administrative_map/nepal_administrative_map.dart';
 
+import 'cities.dart';
+import 'city_glow_layer.dart';
+
 void main() {
   // Optional: start decoding the map data before the first frame.
   NepalMap.preload();
   runApp(const ExampleApp());
 }
+
+/// What the example colours regions by.
+enum ColourBy { nothing, area, localLevels }
 
 class ExampleApp extends StatefulWidget {
   const ExampleApp({super.key});
@@ -54,7 +60,19 @@ class _MapPageState extends State<MapPage> {
   AdminLevel _level = AdminLevel.district;
   Province? _scope;
   bool _bilingualLabels = false;
+  bool _protectedAreas = false;
+  bool _cityMarkers = false;
+  ColourBy _colourBy = ColourBy.nothing;
+  NepalMapData? _data;
   Region? _tapped;
+
+  @override
+  void initState() {
+    super.initState();
+    NepalMap.preload().then((data) {
+      if (mounted) setState(() => _data = data);
+    });
+  }
 
   MapLanguage get _language => _controller.language ?? MapLanguage.en;
   bool get _ne => _language == MapLanguage.ne;
@@ -115,6 +133,40 @@ class _MapPageState extends State<MapPage> {
                   value: _bilingualLabels,
                   onChanged: (v) => setState(() => _bilingualLabels = v),
                 ),
+                _Switch(
+                  label: _ne ? 'संरक्षित क्षेत्र' : 'Protected areas',
+                  value: _protectedAreas,
+                  onChanged: (v) => setState(() => _protectedAreas = v),
+                ),
+                _Switch(
+                  label: _ne ? 'शहरहरू' : 'Cities',
+                  value: _cityMarkers,
+                  onChanged: (v) => setState(() => _cityMarkers = v),
+                ),
+                DropdownButton<ColourBy>(
+                  value: _colourBy,
+                  items: [
+                    DropdownMenuItem(
+                      value: ColourBy.nothing,
+                      child: Text(_ne ? 'रङ: छैन' : 'Colour: none'),
+                    ),
+                    DropdownMenuItem(
+                      value: ColourBy.area,
+                      child: Text(_ne ? 'रङ: क्षेत्रफल' : 'Colour: area'),
+                    ),
+                    DropdownMenuItem(
+                      value: ColourBy.localLevels,
+                      child: Text(
+                        _ne ? 'रङ: स्थानीय तह' : 'Colour: local levels',
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _colourBy = v!),
+                ),
+                SizedBox(
+                  width: 260,
+                  child: NepalMapSearchField(controller: _controller),
+                ),
                 if (!_drillDown) ...[
                   SegmentedButton<AdminLevel>(
                     segments: [
@@ -165,16 +217,47 @@ class _MapPageState extends State<MapPage> {
             child: Stack(
               children: [
                 Positioned.fill(
-                  child: NepalMap(
-                    key: ValueKey((_drillDown, _level, _scope)),
-                    controller: _controller,
-                    drillDown: _drillDown,
-                    level: _drillDown ? AdminLevel.province : _level,
-                    scope: _drillDown ? null : _scope,
-                    labelMode: _bilingualLabels ? LabelMode.both : null,
-                    onRegionTap: (region) => setState(() => _tapped = region),
-                    placeholder: (_) =>
-                        const Center(child: CircularProgressIndicator()),
+                  // Rebuild when drilling so the choropleth matches the level.
+                  child: ListenableBuilder(
+                    listenable: _controller,
+                    builder: (context, _) => NepalMap(
+                      key: ValueKey((_drillDown, _level, _scope)),
+                      controller: _controller,
+                      drillDown: _drillDown,
+                      level: _drillDown ? AdminLevel.province : _level,
+                      scope: _drillDown ? null : _scope,
+                      labelMode: _bilingualLabels ? LabelMode.both : null,
+                      onRegionTap: (region) => setState(() => _tapped = region),
+                      placeholder: (_) =>
+                          const Center(child: CircularProgressIndicator()),
+                      choropleth: _choropleth(
+                        _drillDown ? _controller.level : _level,
+                      ),
+                      showProtectedAreas: _protectedAreas,
+                      markers: [
+                        if (_cityMarkers)
+                          for (final (en, ne, point) in cities)
+                            MapMarker(
+                              point: point,
+                              data: _ne ? ne : en,
+                              child: Icon(
+                                Icons.location_on,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                      ],
+                      onMarkerTap: (marker) => ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(content: Text('${marker.data}')),
+                        ),
+                      extraLayers: [
+                        if (_cityMarkers)
+                          CityGlowLayer([
+                            for (final c in cities) c.$3,
+                          ], Theme.of(context).colorScheme.error),
+                      ],
+                    ),
                   ),
                 ),
                 Positioned(
@@ -200,6 +283,61 @@ class _MapPageState extends State<MapPage> {
       ),
     );
   }
+
+  /// Values for every region at [level]: computed from the boundaries
+  /// (area) or the gazetteer (number of local levels), so nothing is made up.
+  Choropleth? _choropleth(AdminLevel level) {
+    final data = _data;
+    if (data == null || _colourBy == ColourBy.nothing) return null;
+    return switch (_colourBy) {
+      ColourBy.nothing => null,
+      ColourBy.area => Choropleth(
+        values: {
+          for (final s in data.shapesOf(level)) s.feature: s.areaKm2.round(),
+        },
+        scale: ColorScale.sequential(
+          Colors.amber.shade50,
+          Colors.deepOrange.shade800,
+        ),
+        title: const LocalizedName('Area (km²)', 'क्षेत्रफल (वर्ग कि.मी.)'),
+      ),
+      ColourBy.localLevels =>
+        level == AdminLevel.localLevel
+            ? Choropleth(
+                values: {for (final l in LocalLevel.values) l: l.type},
+                scale: ColorScale.categorical(
+                  {
+                    for (final t in LocalLevelType.values)
+                      t: _typeColours[t.index],
+                  },
+                  labels: {for (final t in LocalLevelType.values) t: t.label},
+                ),
+                title: const LocalizedName('Type', 'प्रकार'),
+              )
+            : Choropleth(
+                values: {
+                  for (final r in Nepal.regionsAt(level))
+                    r: switch (r) {
+                      Province() => r.localLevels.length,
+                      District() => r.localLevels.length,
+                      LocalLevel() => 1,
+                    },
+                },
+                scale: ColorScale.sequential(
+                  Colors.teal.shade50,
+                  Colors.teal.shade800,
+                ),
+                title: const LocalizedName('Local levels', 'स्थानीय तह'),
+              ),
+    };
+  }
+
+  static const _typeColours = [
+    Color(0xFF6A1B9A),
+    Color(0xFF1565C0),
+    Color(0xFF26A69A),
+    Color(0xFFC5E1A5),
+  ];
 
   String _describe(Region region) => switch (region) {
     Province() => region.fullName(_language),

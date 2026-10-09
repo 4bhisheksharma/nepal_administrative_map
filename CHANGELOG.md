@@ -1,5 +1,18 @@
 ## Unreleased
 
+* Choropleth maps: `Choropleth` (also `Choropleth.byCode`) with
+  `ColorScale.sequential`, `diverging`, `threshold` and `categorical`,
+  interpolated in OKLab; `RegionState.value`; values in tooltips;
+  `NepalMapTheme.noDataFill`.
+* `NepalMapLegend`, on the map or standalone, with numbers in the active
+  language.
+* Markers: widget markers and painted `MapMarker.dot`s, `onMarkerTap`.
+* Search: `Nepal.search` in English (prefix, typos, old spellings) and
+  Nepali; `NepalMapSearchField`.
+* Point lookups: `NepalMapData.localLevelAt`, `districtAt`, `provinceAt`;
+  `MapShape.areaKm2`; `NepalMap.preload()` returns the data.
+* Opt-in protected-area overlay (`showProtectedAreas`) with labels.
+* Public layer API: `MapLayer`, `MapPaintContext`, `NepalMap.extraLayers`.
 * Zoom and pan: pinch, drag, double-tap, mouse wheel; `minZoom`,
   `maxZoom`, `interactive`.
 * Hover highlight, `onRegionHover`, and tooltips on hover or long-press

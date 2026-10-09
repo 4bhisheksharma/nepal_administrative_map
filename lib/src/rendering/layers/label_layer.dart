@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
-import '../../data/models/region.dart';
+import '../geometry_cache.dart';
 import '../map_layer.dart';
 
 /// Region names, drawn at a constant size in screen space.
@@ -37,27 +37,32 @@ class LabelLayer extends MapLayer {
 
   /// Chooses which labels to show and where, in screen pixels.
   ///
-  /// Labels are tried largest region first; each is kept only if its
-  /// anchor is inside [bounds], it fits inside its region at the current
-  /// zoom, and it doesn't overlap a label already kept.
-  List<({Region region, Rect rect, MapLabel label})> place(
+  /// Region and protected-area labels are tried largest area first; each is
+  /// kept only if its anchor is inside [bounds], it fits inside its shape at
+  /// the current zoom, and it doesn't overlap a label already kept.
+  List<({Object feature, Rect rect, MapLabel label})> place(
     MapPaintContext context,
     Rect bounds,
   ) {
-    final placed = <({Region region, Rect rect, MapLabel label})>[];
-    if (context.labels.isEmpty) return placed;
+    final placed = <({Object feature, Rect rect, MapLabel label})>[];
+    final cache = context.cache;
+    final candidates = <(Object, String, LabelAnchor)>[
+      for (final MapEntry(key: region, value: text) in context.labels.entries)
+        (region, text, cache.labelAnchor(region)),
+      for (final MapEntry(key: area, value: text)
+          in context.protectedAreaLabels.entries)
+        (area, text, cache.protectedAreaAnchor(area)),
+    ]..sort((a, b) => b.$3.area.compareTo(a.$3.area));
+
     final transform = context.transform;
-    for (final region in context.cache.regionsByArea(context.view)) {
-      final text = context.labels[region];
-      if (text == null) continue;
-      final anchor = context.cache.labelAnchor(region);
+    for (final (feature, text, anchor) in candidates) {
       final radius = anchor.radius * transform.scale;
-      if (radius < 4) break; // every remaining region is smaller still
+      if (radius < 4) continue; // too small to hold any label
       final center = transform.toScreen(anchor.point);
       if (!bounds.contains(center)) continue;
 
-      final label = cache.layout(
-        region,
+      final label = this.cache.layout(
+        feature,
         text,
         context.labelStyle,
         context.theme.labelColor,
@@ -74,7 +79,7 @@ class LabelLayer extends MapLayer {
         height: size.height,
       );
       if (placed.any((p) => p.rect.overlaps(rect.inflate(_gap)))) continue;
-      placed.add((region: region, rect: rect, label: label));
+      placed.add((feature: feature, rect: rect, label: label));
     }
     return placed;
   }
@@ -85,7 +90,15 @@ class LabelLayer extends MapLayer {
       old.labelStyle != current.labelStyle ||
       old.theme.labelColor != current.theme.labelColor ||
       old.theme.labelHaloColor != current.theme.labelHaloColor ||
-      !mapEquals(old.labels, current.labels);
+      !mapEquals(old.labels, current.labels) ||
+      !mapEquals(old.protectedAreaLabels, current.protectedAreaLabels);
+
+  @override
+  bool operator ==(Object other) =>
+      other is LabelLayer && identical(other.cache, cache);
+
+  @override
+  int get hashCode => identityHashCode(cache);
 }
 
 /// One laid-out label: a halo pass and a fill pass.
@@ -144,7 +157,7 @@ class MapLabel {
 /// Laid-out labels keyed by region. Text is measured once and reused until
 /// the region's text or the label style changes, e.g. on a language switch.
 class LabelCache {
-  final _labels = <Region, MapLabel>{};
+  final _labels = <Object, MapLabel>{};
 
   /// Number of labels laid out since creation. For tests.
   @visibleForTesting
@@ -153,7 +166,7 @@ class LabelCache {
   /// The laid-out label for [region], reusing the cached one if nothing
   /// changed.
   MapLabel layout(
-    Region region,
+    Object region,
     String text,
     TextStyle style,
     Color color,

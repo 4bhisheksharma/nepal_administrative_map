@@ -104,6 +104,68 @@ Region names are drawn where they fit, largest regions first, in the active
 language. `labelMode: LabelMode.both` shows English with Nepali underneath,
 `LabelMode.none` hides them, and `labelBuilder` sets custom text.
 
+### Choropleth maps
+
+```dart
+NepalMap(
+  level: AdminLevel.district,
+  choropleth: Choropleth(
+    values: {District.kathmandu: 1744240, District.lalitpur: 548401},
+    scale: ColorScale.sequential(Colors.amber.shade50, Colors.deepOrange.shade800),
+    title: LocalizedName('Population', 'जनसंख्या'),
+  ),
+);
+```
+
+Scales: `sequential`, `diverging` (with a midpoint), `threshold` (steps) and
+`categorical` (one colour per value). Colours are interpolated in OKLab, so
+equal steps in value look like equal steps in colour. A legend appears in
+the corner, with Devanagari digits and lakh grouping in Nepali
+(`१७,४४,२४०`), and tooltips show each region's value. Regions without a value
+get the theme's `noDataFill`. Data keyed by code (from a CSV file or an API)
+works too: `Choropleth.byCode({'D305': 1744240, ...}, scale: ...)`.
+
+`NepalMapLegend` is also a standalone widget.
+
+### Markers
+
+```dart
+NepalMap(
+  markers: [
+    MapMarker(point: LatLng(27.7043, 85.3070), child: Icon(Icons.place), data: 'ktm'),
+    MapMarker.dot(point: LatLng(28.2096, 83.9856), color: Colors.red),  // fast for 1,000s
+  ],
+  onMarkerTap: (marker) => print(marker.data),
+);
+```
+
+### Search
+
+```dart
+Nepal.search('pokh');        // [LocalLevel.pokhara]
+Nepal.search('pokahra');     // typos are fine
+Nepal.search('chitawan');    // old spellings too
+Nepal.search('कास्की');       // Nepali → [District.kaski]
+
+NepalMapSearchField(controller: controller);  // picks highlight and zoom
+```
+
+### Which local level is this point in?
+
+```dart
+final data = await NepalMap.preload();
+data.localLevelAt(const LatLng(28.2156, 83.9450));  // LocalLevel.pokhara
+data.districtAt(point); data.provinceAt(point); data.protectedAreaAt(point);
+data.shapeOf(District.kathmandu).areaKm2;           // 415 km² (official: 413)
+```
+
+### Protected areas and custom layers
+
+`showProtectedAreas: true` overlays the 10 protected areas outside local
+levels, with hatching and labels. For your own drawing, extend `MapLayer`
+and pass it in `extraLayers`; see the `MapLayer` docs and
+`example/lib/city_glow_layer.dart`.
+
 ### Selection
 
 `selectionMode` is `single` (default), `multi` or `none`. The map keeps its

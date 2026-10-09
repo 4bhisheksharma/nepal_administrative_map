@@ -10,6 +10,7 @@ class NepalMapStrings {
     required this.country,
     required this.back,
     required this.noData,
+    required this.searchHint,
   });
 
   /// The root of the breadcrumb: "Nepal".
@@ -21,11 +22,15 @@ class NepalMapStrings {
   /// Shown for regions without a value on a data map.
   final String noData;
 
+  /// Placeholder of the search field.
+  final String searchHint;
+
   /// English strings.
   static const en = NepalMapStrings(
     country: 'Nepal',
     back: 'Back',
     noData: 'No data',
+    searchHint: 'Search places',
   );
 
   /// Nepali strings.
@@ -33,6 +38,7 @@ class NepalMapStrings {
     country: 'नेपाल',
     back: 'पछाडि',
     noData: 'डाटा उपलब्ध छैन',
+    searchHint: 'ठाउँ खोज्नुहोस्',
   );
 
   /// The built-in strings for [language].
@@ -42,20 +48,26 @@ class NepalMapStrings {
   };
 
   /// A copy with the given strings replaced.
-  NepalMapStrings copyWith({String? country, String? back, String? noData}) =>
-      NepalMapStrings(
-        country: country ?? this.country,
-        back: back ?? this.back,
-        noData: noData ?? this.noData,
-      );
+  NepalMapStrings copyWith({
+    String? country,
+    String? back,
+    String? noData,
+    String? searchHint,
+  }) => NepalMapStrings(
+    country: country ?? this.country,
+    back: back ?? this.back,
+    noData: noData ?? this.noData,
+    searchHint: searchHint ?? this.searchHint,
+  );
 
   @override
   bool operator ==(Object other) =>
       other is NepalMapStrings &&
       other.country == country &&
       other.back == back &&
-      other.noData == noData;
+      other.noData == noData &&
+      other.searchHint == searchHint;
 
   @override
-  int get hashCode => Object.hash(country, back, noData);
+  int get hashCode => Object.hash(country, back, noData, searchHint);
 }

@@ -57,7 +57,8 @@ class GeometryCache {
 
   final _shapePaths = <String, Path>{};
   final _protectedPaths = <ProtectedArea, Path>{};
-  final _protectedVisible = <MapView, List<ProtectedArea>>{};
+  final _protectedIn = <Region?, List<ProtectedArea>>{};
+  final _protectedAnchors = <ProtectedArea, LabelAnchor>{};
   final _arcPaths = <int, Path>{};
   final _borders = <MapView, BorderPaths>{};
   final _visible = <MapView, List<Region>>{};
@@ -75,17 +76,26 @@ class GeometryCache {
   /// Protected areas to fill as background in [view]: on local-level maps
   /// they would otherwise be holes, since they belong to no local level.
   List<ProtectedArea> protectedAreas(MapView view) =>
-      _protectedVisible[view] ??= view.level != AdminLevel.localLevel
-      ? const []
-      : List.unmodifiable(
-          data.protectedAreas
-              .map((s) => s.feature)
-              .where(
-                (area) => area.districts.any(
-                  (d) => inScope(d, view.scope) || d == view.scope,
-                ),
-              ),
-        );
+      view.level == AdminLevel.localLevel
+      ? protectedAreasIn(view.scope)
+      : const [];
+
+  /// Protected areas that reach into [scope] (all of them without a scope).
+  List<ProtectedArea> protectedAreasIn(Region? scope) =>
+      _protectedIn[scope] ??= List.unmodifiable(
+        data.protectedAreas
+            .map((s) => s.feature)
+            .where(
+              (area) =>
+                  area.districts.any((d) => inScope(d, scope) || d == scope),
+            ),
+      );
+
+  /// Label position of [area], like [labelAnchor].
+  LabelAnchor protectedAreaAnchor(ProtectedArea area) =>
+      _protectedAnchors[area] ??= _anchorOf(
+        data.protectedAreaShapeOf(area).polygons,
+      );
 
   /// Fill path of [area].
   Path protectedAreaPath(ProtectedArea area) => _protectedPaths[area] ??=
@@ -114,9 +124,12 @@ class GeometryCache {
           ..sort((a, b) => labelAnchor(b).area.compareTo(labelAnchor(a).area)),
       );
 
-  LabelAnchor _buildAnchor(Region region) {
+  LabelAnchor _buildAnchor(Region region) =>
+      _anchorOf(data.shapeOf(region).polygons);
+
+  LabelAnchor _anchorOf(List<List<Float64List>> polygons) {
     var best = (rings: <Float64List>[], area: -1.0);
-    for (final polygon in data.shapeOf(region).polygons) {
+    for (final polygon in polygons) {
       final rings = [for (final ring in polygon) plane.projectCoords(ring)];
       final area = polygonArea(rings);
       if (area > best.area) best = (rings: rings, area: area);

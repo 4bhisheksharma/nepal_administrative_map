@@ -29,6 +29,8 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     required this.parentBorderColor,
     required this.outlineColor,
     required this.protectedAreaFill,
+    required this.noDataFill,
+    required this.protectedAreaOverlay,
     required this.labelColor,
     required this.labelHaloColor,
     this.borderWidth = 0.5,
@@ -52,6 +54,11 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     parentBorderColor: scheme.outline,
     outlineColor: scheme.outline,
     protectedAreaFill: scheme.surfaceContainerLow,
+    noDataFill: Color.alphaBlend(
+      scheme.outlineVariant.withValues(alpha: 0.35),
+      scheme.surface,
+    ),
+    protectedAreaOverlay: scheme.tertiary,
     labelColor: scheme.onSurface,
     labelHaloColor: scheme.surfaceContainerHighest,
   );
@@ -90,6 +97,13 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
   /// Fill of protected areas on local-level maps. They belong to no local
   /// level and can't be tapped.
   final Color protectedAreaFill;
+
+  /// Fill of regions without a value on a choropleth map.
+  final Color noDataFill;
+
+  /// Colour of the protected-area overlay (`showProtectedAreas`): its
+  /// outline, and a lighter tint and hatching inside.
+  final Color protectedAreaOverlay;
 
   /// Colour of region labels.
   final Color labelColor;
@@ -142,6 +156,8 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     Color? parentBorderColor,
     Color? outlineColor,
     Color? protectedAreaFill,
+    Color? noDataFill,
+    Color? protectedAreaOverlay,
     Color? labelColor,
     Color? labelHaloColor,
     double? borderWidth,
@@ -159,6 +175,8 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     parentBorderColor: parentBorderColor ?? this.parentBorderColor,
     outlineColor: outlineColor ?? this.outlineColor,
     protectedAreaFill: protectedAreaFill ?? this.protectedAreaFill,
+    noDataFill: noDataFill ?? this.noDataFill,
+    protectedAreaOverlay: protectedAreaOverlay ?? this.protectedAreaOverlay,
     labelColor: labelColor ?? this.labelColor,
     labelHaloColor: labelHaloColor ?? this.labelHaloColor,
     borderWidth: borderWidth ?? this.borderWidth,
@@ -183,6 +201,8 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
       parentBorderColor: c(parentBorderColor, other.parentBorderColor),
       outlineColor: c(outlineColor, other.outlineColor),
       protectedAreaFill: c(protectedAreaFill, other.protectedAreaFill),
+      noDataFill: c(noDataFill, other.noDataFill),
+      protectedAreaOverlay: c(protectedAreaOverlay, other.protectedAreaOverlay),
       labelColor: c(labelColor, other.labelColor),
       labelHaloColor: c(labelHaloColor, other.labelHaloColor),
       borderWidth: d(borderWidth, other.borderWidth),
@@ -209,6 +229,8 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
       other.parentBorderColor == parentBorderColor &&
       other.outlineColor == outlineColor &&
       other.protectedAreaFill == protectedAreaFill &&
+      other.noDataFill == noDataFill &&
+      other.protectedAreaOverlay == protectedAreaOverlay &&
       other.labelColor == labelColor &&
       other.labelHaloColor == labelHaloColor &&
       other.borderWidth == borderWidth &&
@@ -228,6 +250,8 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     parentBorderColor,
     outlineColor,
     protectedAreaFill,
+    noDataFill,
+    protectedAreaOverlay,
     labelColor,
     labelHaloColor,
     borderWidth,

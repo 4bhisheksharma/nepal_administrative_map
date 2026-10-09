@@ -17,6 +17,8 @@ class RegionTooltip extends StatelessWidget {
     super.key,
     required this.region,
     required this.language,
+    this.value,
+    this.valueLabel,
   });
 
   /// The region to describe.
@@ -24,6 +26,12 @@ class RegionTooltip extends StatelessWidget {
 
   /// The language to describe it in.
   final MapLanguage language;
+
+  /// The region's formatted data value, if any.
+  final String? value;
+
+  /// What [value] is, e.g. "Population".
+  final String? valueLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +61,11 @@ class RegionTooltip extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               if (parent != null) Text(parent),
+              if (value case final v?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(valueLabel == null ? v : '$valueLabel: $v'),
+                ),
             ],
           ),
         ),
