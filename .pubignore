@@ -1,0 +1,22 @@
+# .pubignore replaces .gitignore for publishing, so repeat its entries.
+.dart_tool/
+.idea/
+*.iml
+build/
+/pubspec.lock
+/plan
+.github/
+
+# Maintainer-only files: raw source data and the build pipeline inputs.
+tool/source/raw/
+test/goldens/images/
+
+# Example app build output and platform caches.
+example/build/
+example/.dart_tool/
+example/pubspec.lock
+# pub.dev only needs the example's Dart code.
+example/android/
+example/ios/
+example/macos/
+example/web/

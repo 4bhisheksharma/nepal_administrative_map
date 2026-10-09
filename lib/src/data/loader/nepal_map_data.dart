@@ -131,13 +131,20 @@ final class NepalMapData {
     return _cache[key] ??= () async {
       try {
         final json = await source.load();
-        return await runInBackground(() => NepalMapData.parse(json));
+        return await _parseInBackground(json);
       } catch (_) {
         _cache.removeWhere((k, _) => k == key);
         rethrow;
       }
     }();
   }
+
+  // A separate function so the isolate's closure captures only the string.
+  // A closure inside [load] would also capture the source, which may hold
+  // objects that can't be sent between isolates (e.g. an asset bundle's
+  // pending futures).
+  static Future<NepalMapData> _parseInBackground(String json) =>
+      runInBackground(() => NepalMapData.parse(json));
 
   /// Forgets every loaded copy. Mainly for tests.
   static void clearCache() => _cache.clear();

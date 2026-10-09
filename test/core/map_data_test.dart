@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -150,6 +151,16 @@ void main() {
       expect(calls, 2);
     });
 
+    test(
+      'works when the source holds objects that cannot cross isolates',
+      () async {
+        // Regression: the isolate closure used to capture the source, so a
+        // source holding e.g. a pending Future failed to load.
+        final source = _SourceWithFuture();
+        expect(await NepalMapData.load(source), isA<NepalMapData>());
+      },
+    );
+
     test('rejects data that does not match the gazetteer', () {
       const json =
           '{"type":"Topology","arcs":[],"objects":{"provinces":'
@@ -157,4 +168,14 @@ void main() {
       expect(() => NepalMapData.parse(json), throwsFormatException);
     });
   });
+}
+
+class _SourceWithFuture extends MapDataSource {
+  final pending = Completer<void>().future;
+
+  @override
+  Object get cacheKey => this;
+
+  @override
+  Future<String> load() => File('assets/maps/nepal.topo.json').readAsString();
 }

@@ -3,3 +3,7 @@
 library;
 
 export 'core.dart';
+export 'src/rendering/asset_map_data_source.dart';
+export 'src/rendering/style/nepal_map_theme.dart';
+export 'src/rendering/style/region_style.dart';
+export 'src/widget/nepal_map.dart';

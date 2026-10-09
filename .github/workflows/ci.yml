@@ -18,9 +18,15 @@ jobs:
         with:
           node-version: 22
       - run: flutter pub get
-      - run: dart format --output=none --set-exit-if-changed lib test tool
+      - run: dart format --output=none --set-exit-if-changed lib test tool example/lib example/test
       - run: flutter analyze
-      - run: flutter test
+      # Goldens depend on the OS's anti-aliasing; run them locally instead.
+      - run: flutter test --exclude-tags golden
+      - name: Example app
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter test
       - name: Generated data is up to date
         run: |
           dart run tool/build_data.dart
