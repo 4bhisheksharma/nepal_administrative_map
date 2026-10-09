@@ -5,7 +5,7 @@
 part of 'region.dart';
 
 /// Nepal's 7 provinces.
-enum Province implements Region {
+enum Province with _ProvinceMembers implements Region {
   /// Koshi Province.
   koshi('P1', 1, LocalizedName('Koshi', 'कोशी')),
 
@@ -43,7 +43,7 @@ enum Province implements Region {
 }
 
 /// Nepal's 77 districts.
-enum District implements Region {
+enum District with _DistrictMembers implements Region {
   /// Bhojpur District, Koshi Province.
   bhojpur('D101', LocalizedName('Bhojpur', 'भोजपुर'), Province.koshi),
 
@@ -335,7 +335,7 @@ enum District implements Region {
   @override
   final LocalizedName name;
 
-  /// The province this district belongs to.
+  @override
   final Province province;
 
   @override
@@ -343,7 +343,7 @@ enum District implements Region {
 }
 
 /// Nepal's 753 local levels (gaunpalika and nagarpalika).
-enum LocalLevel implements Region {
+enum LocalLevel with _LocalLevelMembers implements Region {
   /// Aamchowk Rural Municipality, Bhojpur District. Nepali name pending.
   aamchowk(
     'L10101',
@@ -6390,7 +6390,7 @@ enum LocalLevel implements Region {
 ///
 /// This is not a complete list of protected areas in Nepal: parks such as
 /// Sagarmatha lie inside local levels and are not listed here.
-enum ProtectedArea {
+enum ProtectedArea with _ProtectedAreaMembers {
   /// Bardiya National Park.
   bardiya(
     'PA01',

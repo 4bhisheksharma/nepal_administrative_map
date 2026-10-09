@@ -1,3 +1,5 @@
+import 'map_language.dart';
+
 /// A name in both English and Nepali (Devanagari).
 class LocalizedName {
   /// Creates a name from its English and Nepali forms.
@@ -8,6 +10,12 @@ class LocalizedName {
 
   /// Nepali name in Devanagari, e.g. `काठमाडौं`.
   final String ne;
+
+  /// The name in [language].
+  String of(MapLanguage language) => switch (language) {
+    MapLanguage.en => en,
+    MapLanguage.ne => ne,
+  };
 
   @override
   bool operator ==(Object other) =>

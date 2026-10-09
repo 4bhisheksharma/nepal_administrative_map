@@ -113,7 +113,7 @@ String generateRegions(
     ..writeln("part of 'region.dart';")
     ..writeln()
     ..writeln("/// Nepal's 7 provinces.")
-    ..writeln('enum Province implements Region {');
+    ..writeln('enum Province with _ProvinceMembers implements Region {');
   for (final r in of('province')) {
     b
       ..writeln('  /// ${r.nameEn} Province.${pending(r)}')
@@ -141,7 +141,7 @@ String generateRegions(
     ..writeln('}')
     ..writeln()
     ..writeln("/// Nepal's 77 districts.")
-    ..writeln('enum District implements Region {');
+    ..writeln('enum District with _DistrictMembers implements Region {');
   for (final r in of('district')) {
     final p = byCode[r.parentCode]!;
     b
@@ -165,7 +165,7 @@ String generateRegions(
     ..writeln('  @override')
     ..writeln('  final LocalizedName name;')
     ..writeln()
-    ..writeln('  /// The province this district belongs to.')
+    ..writeln('  @override')
     ..writeln('  final Province province;')
     ..writeln()
     ..writeln('  @override')
@@ -173,7 +173,7 @@ String generateRegions(
     ..writeln('}')
     ..writeln()
     ..writeln("/// Nepal's 753 local levels (gaunpalika and nagarpalika).")
-    ..writeln('enum LocalLevel implements Region {');
+    ..writeln('enum LocalLevel with _LocalLevelMembers implements Region {');
   for (final r in of('local_level')) {
     final d = byCode[r.parentCode]!;
     b
@@ -217,7 +217,7 @@ String generateRegions(
       'parks such as',
     )
     ..writeln('/// Sagarmatha lie inside local levels and are not listed here.')
-    ..writeln('enum ProtectedArea {');
+    ..writeln('enum ProtectedArea with _ProtectedAreaMembers {');
   for (final r in of('protected_area')) {
     final districts = protectedAreaDistricts[r.code]!
         .map((c) => 'District.${ids[c]}')
