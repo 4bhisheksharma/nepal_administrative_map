@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-
 import '../data/loader/map_data_source.dart';
 import '../data/loader/nepal_map_data.dart';
 import '../data/models/region.dart';
@@ -278,6 +276,7 @@ class _NepalMapState extends State<NepalMap>
     with TickerProviderStateMixin
     implements NepalMapDelegate {
   late Future<NepalMapData> _data;
+  bool _retried = false;
   NepalMapController? _ownController;
   NepalMapController get _controller => widget.controller ?? _ownController!;
 
@@ -353,6 +352,7 @@ class _NepalMapState extends State<NepalMap>
     super.didUpdateWidget(old);
     if (old.dataSource.cacheKey != widget.dataSource.cacheKey) {
       _data = NepalMapData.load(widget.dataSource);
+      _retried = false;
     }
     if (old.choropleth != widget.choropleth &&
         _lastFills.isNotEmpty &&
@@ -946,6 +946,17 @@ class _NepalMapState extends State<NepalMap>
     return FutureBuilder<NepalMapData>(
       future: _data,
       builder: (context, snapshot) {
+        if (snapshot.hasError && !_retried) {
+          // The load this map joined may have been started too early (e.g. a
+          // preload that failed). Failed loads aren't cached, so try once more.
+          _retried = true;
+          // Subscribed on the next build; until then, don't report a failure
+          // as unhandled (the error builder will still receive it).
+          _data = NepalMapData.load(widget.dataSource)..ignore();
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+        }
         if (snapshot.hasError) {
           return _sized(
             _nepalAspectRatio,
