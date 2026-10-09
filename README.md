@@ -1,39 +1,26 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# nepal_administrative_map
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+An interactive administrative map of Nepal for Flutter: 7 provinces,
+77 districts and 753 local levels, in English and Nepali.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+> **Status: in development.** Not yet published. The data layer and typed
+> regions are in place; the map widget is next.
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
-
-## Features
-
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+## What works today
 
 ```dart
-const like = 'sample';
+import 'package:nepal_administrative_map/core.dart';
+
+LocalLevel.pokhara.district;            // District.kaski
+District.kaski.province;                // Province.gandaki
+District.kathmandu.name.ne;             // काठमाडौं
+LocalLevel.values.length;               // 753
 ```
 
-## Additional information
+## Data & attribution
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+Boundary data: **© [OKNP LocalBoundaries](https://localboundries.oknp.org/)**,
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+The data has been simplified and extended with codes and Nepali names; see
+[DATA_LICENSE.md](DATA_LICENSE.md) for the full list of changes. Apps that
+ship this map must credit the data, e.g. in an About screen.

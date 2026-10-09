@@ -1,5 +1,5 @@
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+/// Interactive administrative map of Nepal: 7 provinces, 77 districts and
+/// 753 local levels, in English and Nepali.
+library;
+
+export 'core.dart';
