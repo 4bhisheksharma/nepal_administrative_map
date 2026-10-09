@@ -1,6 +1,6 @@
 name: nepal_administrative_map
 description: Interactive, bilingual (English/Nepali) map of Nepal's 7 provinces, 77 districts and 753 local levels, with zoom, drill-down, choropleths and search.
-version: 0.0.2
+version: 0.0.3
 homepage: https://github.com/4bhisheksharma/nepal_administrative_map
 repository: https://github.com/4bhisheksharma/nepal_administrative_map
 issue_tracker: https://github.com/4bhisheksharma/nepal_administrative_map/issues
