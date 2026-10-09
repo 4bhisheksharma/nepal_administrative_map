@@ -14,7 +14,7 @@ void main() {
         of: find.byType(NepalMap),
         matching: find.byType(CustomPaint),
       ),
-      findsNWidgets(3),
+      findsNWidgets(4),
     );
     expect(find.bySemanticsLabel('Nepal'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -122,9 +122,9 @@ void main() {
       await pumpMap(tester, NepalMap(onSelectionChanged: changes.add));
       final ktm = pixelOf(data, durbarSquare);
       final koshi = pixelOf(data, biratnagar);
-      await tester.tapAt(ktm);
-      await tester.tapAt(koshi);
-      await tester.tapAt(koshi);
+      await tapAtTime(tester, ktm, Duration.zero);
+      await tapAtTime(tester, koshi, const Duration(seconds: 1));
+      await tapAtTime(tester, koshi, const Duration(seconds: 2));
       expect(changes, [
         {Province.bagmati},
         {Province.koshi},

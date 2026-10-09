@@ -26,8 +26,8 @@ class HighlightLayer extends MapLayer {
   }
 
   @override
-  bool shouldRepaint(MapPaintContext old, MapPaintContext current) =>
+  bool needsRepaint(MapPaintContext old, MapPaintContext current) =>
       old.view != current.view ||
-      old.transform != current.transform ||
+      old.transform.scale != current.transform.scale ||
       !mapEquals(old.styles, current.styles);
 }

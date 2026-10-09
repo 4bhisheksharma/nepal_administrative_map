@@ -66,3 +66,16 @@ Offset pixelOf(
 const durbarSquare = LatLng(27.7043, 85.3070); // Kathmandu
 const phewaLake = LatLng(28.2156, 83.9450); // Pokhara, Kaski
 const biratnagar = LatLng(26.4525, 87.2718); // Koshi
+
+/// Taps at [position] with pointer time stamp [at]. Taps closer together
+/// than 300 ms at the same spot count as a double tap (zoom).
+Future<void> tapAtTime(
+  WidgetTester tester,
+  Offset position,
+  Duration at,
+) async {
+  final gesture = await tester.createGesture();
+  await gesture.down(position, timeStamp: at);
+  await gesture.up(timeStamp: at + const Duration(milliseconds: 50));
+  await tester.pump();
+}

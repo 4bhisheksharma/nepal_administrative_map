@@ -6,6 +6,8 @@ An interactive administrative map of Nepal for Flutter: **7 provinces,
 - No third-party dependencies, works offline: one 422 KB data file is bundled.
 - Typed regions (`District.kaski`, `LocalLevel.pokhara`) with stable codes
   and names in both languages.
+- Zoom, pan, hover tooltips, labels in English and/or Nepali, drill-down
+  from provinces to local levels, and a controller to drive it all.
 - Tap to select, scope to one province or district, theme with your app's
   colours (light and dark).
 - A pure-Dart core for server and CLI use: point lookup, name and number
@@ -50,6 +52,58 @@ NepalMap(
 The map fills the space it's given. With unbounded height (e.g. in a
 `Column` inside a scroll view) it keeps Nepal's aspect ratio.
 
+### Zoom, pan and drill-down
+
+Pinch, drag, double-tap and the mouse wheel zoom and pan (`interactive:
+false` turns this off; taps still work). Hovering shows a tooltip; on touch,
+long-press does.
+
+```dart
+final controller = NepalMapController();
+
+Column(children: [
+  NepalMapBreadcrumb(controller: controller),     // Nepal › Gandaki Province › Kaski
+  Expanded(
+    child: NepalMap(controller: controller, drillDown: true),
+  ),
+]);
+```
+
+With `drillDown: true`, tapping a province shows its districts and tapping a
+district its local levels. Go back with the breadcrumb, Esc, or
+`controller.drillUp()`. To handle Android's back gesture:
+
+```dart
+ListenableBuilder(
+  listenable: controller,
+  builder: (context, child) => PopScope(
+    canPop: controller.scope == null,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) controller.drillUp();
+    },
+    child: child!,
+  ),
+  child: NepalMap(controller: controller, drillDown: true),
+);
+```
+
+### Controller
+
+```dart
+controller.select(District.kaski);
+controller.highlight([LocalLevel.pokhara, LocalLevel.bharatpur]);
+controller.zoomTo(Province.koshi);
+controller.zoomIn(); controller.zoomOut(); controller.resetView();
+controller.language = MapLanguage.ne;   // overrides the widget and locale
+controller.selection;                   // ValueListenable<Set<Region>>
+```
+
+### Labels
+
+Region names are drawn where they fit, largest regions first, in the active
+language. `labelMode: LabelMode.both` shows English with Nepali underneath,
+`LabelMode.none` hides them, and `labelBuilder` sets custom text.
+
 ### Selection
 
 `selectionMode` is `single` (default), `multi` or `none`. The map keeps its
@@ -58,7 +112,7 @@ own selection, or pass `selected` and `onSelectionChanged` to control it.
 ### Language
 
 By default the map follows the app's locale: Nepali for `ne`, English
-otherwise. Set `language` to override it.
+otherwise. Set `language` (or `controller.language`) to override it.
 
 ```dart
 LocalLevel.pokhara.fullName(MapLanguage.en);  // Pokhara Metropolitan City

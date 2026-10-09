@@ -1,0 +1,182 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
+
+import '../../data/models/region.dart';
+import '../map_layer.dart';
+
+/// Region names, drawn at a constant size in screen space.
+///
+/// Each label sits at its region's pole of inaccessibility and is shown only
+/// if it fits inside the region at the current zoom and doesn't overlap a
+/// label already placed. Larger regions are placed first.
+class LabelLayer extends MapLayer {
+  /// Creates the layer. [cache] holds the laid-out text between frames.
+  const LabelLayer(this.cache);
+
+  /// Laid-out text, reused until the text or style changes.
+  final LabelCache cache;
+
+  /// How far (as a multiple of the inscribed circle's radius) a label may
+  /// extend from its anchor. Slightly over 1 lets labels use the space of
+  /// elongated regions.
+  static const _fitWidth = 1.35;
+  static const _fitHeight = 0.95;
+
+  /// Minimum gap between labels, in logical pixels.
+  static const _gap = 2.0;
+
+  @override
+  bool get screenSpace => true;
+
+  @override
+  void paint(Canvas canvas, MapPaintContext context) {
+    for (final placed in place(context, canvas.getLocalClipBounds())) {
+      placed.label.paint(canvas, placed.rect.topLeft);
+    }
+  }
+
+  /// Chooses which labels to show and where, in screen pixels.
+  ///
+  /// Labels are tried largest region first; each is kept only if its
+  /// anchor is inside [bounds], it fits inside its region at the current
+  /// zoom, and it doesn't overlap a label already kept.
+  List<({Region region, Rect rect, MapLabel label})> place(
+    MapPaintContext context,
+    Rect bounds,
+  ) {
+    final placed = <({Region region, Rect rect, MapLabel label})>[];
+    if (context.labels.isEmpty) return placed;
+    final transform = context.transform;
+    for (final region in context.cache.regionsByArea(context.view)) {
+      final text = context.labels[region];
+      if (text == null) continue;
+      final anchor = context.cache.labelAnchor(region);
+      final radius = anchor.radius * transform.scale;
+      if (radius < 4) break; // every remaining region is smaller still
+      final center = transform.toScreen(anchor.point);
+      if (!bounds.contains(center)) continue;
+
+      final label = cache.layout(
+        region,
+        text,
+        context.labelStyle,
+        context.theme.labelColor,
+        context.theme.labelHaloColor,
+      );
+      final size = label.size;
+      if (size.width / 2 > radius * _fitWidth ||
+          size.height / 2 > radius * _fitHeight) {
+        continue;
+      }
+      final rect = Rect.fromCenter(
+        center: center,
+        width: size.width,
+        height: size.height,
+      );
+      if (placed.any((p) => p.rect.overlaps(rect.inflate(_gap)))) continue;
+      placed.add((region: region, rect: rect, label: label));
+    }
+    return placed;
+  }
+
+  @override
+  bool needsRepaint(MapPaintContext old, MapPaintContext current) =>
+      old.view != current.view ||
+      old.labelStyle != current.labelStyle ||
+      old.theme.labelColor != current.theme.labelColor ||
+      old.theme.labelHaloColor != current.theme.labelHaloColor ||
+      !mapEquals(old.labels, current.labels);
+}
+
+/// One laid-out label: a halo pass and a fill pass.
+class MapLabel {
+  /// Lays out [text] in [style], filled with [color] over a [halo].
+  MapLabel(this.text, this.style, this.color, this.halo)
+    : _halo = _painter(
+        text,
+        style.copyWith(
+          foreground: Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3
+            ..strokeJoin = StrokeJoin.round
+            ..color = halo,
+        ),
+      ),
+      _fill = _painter(text, style.copyWith(color: color));
+
+  /// The label text.
+  final String text;
+
+  /// Font, size and weight.
+  final TextStyle style;
+
+  /// Text colour.
+  final Color color;
+
+  /// Halo colour.
+  final Color halo;
+
+  final TextPainter _halo;
+  final TextPainter _fill;
+
+  /// Laid-out size.
+  Size get size => _fill.size;
+
+  /// Paints the label with its top-left corner at [topLeft].
+  void paint(Canvas canvas, Offset topLeft) {
+    _halo.paint(canvas, topLeft);
+    _fill.paint(canvas, topLeft);
+  }
+
+  /// Releases the text painters.
+  void dispose() {
+    _halo.dispose();
+    _fill.dispose();
+  }
+
+  static TextPainter _painter(String text, TextStyle style) => TextPainter(
+    text: TextSpan(text: text, style: style),
+    textAlign: TextAlign.center,
+    textDirection: TextDirection.ltr,
+  )..layout();
+}
+
+/// Laid-out labels keyed by region. Text is measured once and reused until
+/// the region's text or the label style changes, e.g. on a language switch.
+class LabelCache {
+  final _labels = <Region, MapLabel>{};
+
+  /// Number of labels laid out since creation. For tests.
+  @visibleForTesting
+  int layoutCount = 0;
+
+  /// The laid-out label for [region], reusing the cached one if nothing
+  /// changed.
+  MapLabel layout(
+    Region region,
+    String text,
+    TextStyle style,
+    Color color,
+    Color halo,
+  ) {
+    final cached = _labels[region];
+    if (cached != null &&
+        cached.text == text &&
+        cached.style == style &&
+        cached.color == color &&
+        cached.halo == halo) {
+      return cached;
+    }
+    cached?.dispose();
+    layoutCount++;
+    return _labels[region] = MapLabel(text, style, color, halo);
+  }
+
+  /// Releases every laid-out label.
+  void dispose() {
+    for (final label in _labels.values) {
+      label.dispose();
+    }
+    _labels.clear();
+  }
+}

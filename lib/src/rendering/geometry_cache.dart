@@ -1,7 +1,10 @@
-import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
+
 import '../data/loader/nepal_map_data.dart';
+import '../geometry/polygon.dart';
+import '../geometry/polylabel.dart';
 import '../data/models/region.dart';
 import 'map_plane.dart';
 
@@ -16,6 +19,9 @@ bool inScope(Region region, Region? scope) => switch (scope) {
   LocalLevel() => region == scope,
 };
 
+/// Where a region's label goes, in plane units.
+typedef LabelAnchor = ({Offset point, double radius, double area});
+
 /// Arc paths for one [MapView].
 class BorderPaths {
   BorderPaths._(this.inner, this.parent, this.outline);
@@ -24,7 +30,7 @@ class BorderPaths {
   final Path inner;
 
   /// Borders of coarser levels inside the view, e.g. province borders when
-  /// showing districts.
+  /// showing districts. On a province map, the province borders.
   final Path parent;
 
   /// The outer edge of the view (the country, or the scope region).
@@ -55,6 +61,8 @@ class GeometryCache {
   final _arcPaths = <int, Path>{};
   final _borders = <MapView, BorderPaths>{};
   final _visible = <MapView, List<Region>>{};
+  final _anchors = <Region, LabelAnchor>{};
+  final _byArea = <MapView, List<Region>>{};
 
   /// Regions shown for [view], in code order.
   List<Region> regions(MapView view) => _visible[view] ??= List.unmodifiable(
@@ -92,6 +100,34 @@ class GeometryCache {
   /// Fill path of [region] (even-odd, so holes stay empty).
   Path pathOf(Region region) =>
       _shapePaths[region.code] ??= _buildShapePath(region);
+
+  /// Label position of [region]: the pole of inaccessibility of its largest
+  /// polygon, how far that point is from the nearest edge, and the
+  /// polygon's area (all in plane units).
+  LabelAnchor labelAnchor(Region region) =>
+      _anchors[region] ??= _buildAnchor(region);
+
+  /// [regions] of [view], largest first: the order labels are placed in.
+  List<Region> regionsByArea(MapView view) =>
+      _byArea[view] ??= List.unmodifiable(
+        <Region>[...regions(view)]
+          ..sort((a, b) => labelAnchor(b).area.compareTo(labelAnchor(a).area)),
+      );
+
+  LabelAnchor _buildAnchor(Region region) {
+    var best = (rings: <Float64List>[], area: -1.0);
+    for (final polygon in data.shapeOf(region).polygons) {
+      final rings = [for (final ring in polygon) plane.projectCoords(ring)];
+      final area = polygonArea(rings);
+      if (area > best.area) best = (rings: rings, area: area);
+    }
+    final p = polylabel(best.rings);
+    return (point: Offset(p.x, p.y), radius: p.distance, area: best.area);
+  }
+
+  /// Number of region fill paths built so far. For tests.
+  @visibleForTesting
+  int get pathCount => _shapePaths.length;
 
   /// Border paths for [view].
   BorderPaths borders(MapView view) => _borders[view] ??= _buildBorders(view);
@@ -139,9 +175,13 @@ class GeometryCache {
 
     final inner = Path(), parent = Path(), outline = Path();
     for (final MapEntry(key: arc, value: count) in own.entries) {
+      // Province borders always get the stronger parent style, so they look
+      // the same on a province map as on a district map.
       final target = count == 1
           ? outline
-          : (parentArcs.contains(arc) ? parent : inner);
+          : (view.level == AdminLevel.province || parentArcs.contains(arc)
+                ? parent
+                : inner);
       target.addPath(_arcPath(arc), Offset.zero);
     }
     return BorderPaths._(inner, parent, outline);

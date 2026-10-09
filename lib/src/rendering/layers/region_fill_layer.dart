@@ -34,9 +34,8 @@ class RegionFillLayer extends MapLayer {
   }
 
   @override
-  bool shouldRepaint(MapPaintContext old, MapPaintContext current) =>
+  bool needsRepaint(MapPaintContext old, MapPaintContext current) =>
       old.view != current.view ||
-      old.transform != current.transform ||
       old.theme.protectedAreaFill != current.theme.protectedAreaFill ||
       !mapEquals(old.styles, current.styles);
 }

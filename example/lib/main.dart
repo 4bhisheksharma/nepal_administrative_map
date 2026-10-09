@@ -49,12 +49,21 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
+  final _controller = NepalMapController(language: MapLanguage.en);
+  bool _drillDown = true;
   AdminLevel _level = AdminLevel.district;
   Province? _scope;
-  MapLanguage _language = MapLanguage.en;
+  bool _bilingualLabels = false;
   Region? _tapped;
 
+  MapLanguage get _language => _controller.language ?? MapLanguage.en;
   bool get _ne => _language == MapLanguage.ne;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +81,8 @@ class _MapPageState extends State<MapPage> {
             ],
             selected: {_language},
             showSelectedIcon: false,
-            onSelectionChanged: (s) => setState(() => _language = s.single),
+            onSelectionChanged: (s) =>
+                setState(() => _controller.language = s.single),
           ),
           IconButton(
             tooltip: widget.dark ? 'Light mode' : 'Dark mode',
@@ -86,60 +96,93 @@ class _MapPageState extends State<MapPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: Wrap(
-              spacing: 12,
+              spacing: 16,
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SegmentedButton<AdminLevel>(
-                  segments: [
-                    for (final level in AdminLevel.values)
-                      if (_scope == null || level != AdminLevel.province)
-                        ButtonSegment(
-                          value: level,
-                          label: Text(level.label.of(_language)),
-                        ),
-                  ],
-                  selected: {_level},
-                  onSelectionChanged: (s) => setState(() {
-                    _level = s.single;
+                _Switch(
+                  label: _ne ? 'तह अनुसार खोल्नुहोस्' : 'Drill down',
+                  value: _drillDown,
+                  onChanged: (v) => setState(() {
+                    _drillDown = v;
                     _tapped = null;
                   }),
                 ),
-                DropdownButton<Province?>(
-                  value: _scope,
-                  items: [
-                    DropdownMenuItem(
-                      value: null,
-                      child: Text(_ne ? 'सम्पूर्ण नेपाल' : 'All of Nepal'),
-                    ),
-                    for (final p in Province.values)
+                _Switch(
+                  label: _ne ? 'दुवै भाषामा नाम' : 'Bilingual labels',
+                  value: _bilingualLabels,
+                  onChanged: (v) => setState(() => _bilingualLabels = v),
+                ),
+                if (!_drillDown) ...[
+                  SegmentedButton<AdminLevel>(
+                    segments: [
+                      for (final level in AdminLevel.values)
+                        if (_scope == null || level != AdminLevel.province)
+                          ButtonSegment(
+                            value: level,
+                            label: Text(level.label.of(_language)),
+                          ),
+                    ],
+                    selected: {_level},
+                    onSelectionChanged: (s) => setState(() {
+                      _level = s.single;
+                      _tapped = null;
+                    }),
+                  ),
+                  DropdownButton<Province?>(
+                    value: _scope,
+                    items: [
                       DropdownMenuItem(
-                        value: p,
-                        child: Text(p.fullName(_language)),
+                        value: null,
+                        child: Text(_ne ? 'सम्पूर्ण नेपाल' : 'All of Nepal'),
                       ),
-                  ],
-                  onChanged: (p) => setState(() {
-                    _scope = p;
-                    if (p != null && _level == AdminLevel.province) {
-                      _level = AdminLevel.district;
-                    }
-                    _tapped = null;
-                  }),
-                ),
+                      for (final p in Province.values)
+                        DropdownMenuItem(
+                          value: p,
+                          child: Text(p.fullName(_language)),
+                        ),
+                    ],
+                    onChanged: (p) => setState(() {
+                      _scope = p;
+                      if (p != null && _level == AdminLevel.province) {
+                        _level = AdminLevel.district;
+                      }
+                      _tapped = null;
+                    }),
+                  ),
+                ],
               ],
             ),
           ),
+          if (_drillDown)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: NepalMapBreadcrumb(controller: _controller),
+            ),
           Expanded(
-            child: NepalMap(
-              key: ValueKey((_level, _scope)),
-              level: _level,
-              scope: _scope,
-              language: _language,
-              onRegionTap: (region) => setState(() => _tapped = region),
-              placeholder: (_) =>
-                  const Center(child: CircularProgressIndicator()),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: NepalMap(
+                    key: ValueKey((_drillDown, _level, _scope)),
+                    controller: _controller,
+                    drillDown: _drillDown,
+                    level: _drillDown ? AdminLevel.province : _level,
+                    scope: _drillDown ? null : _scope,
+                    labelMode: _bilingualLabels ? LabelMode.both : null,
+                    onRegionTap: (region) => setState(() => _tapped = region),
+                    placeholder: (_) =>
+                        const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: _ZoomButtons(controller: _controller),
+                ),
+              ],
             ),
           ),
           Padding(
@@ -166,4 +209,56 @@ class _MapPageState extends State<MapPage> {
       '${region.fullName(_language)} · ${region.district.fullName(_language)} · '
           '${region.province.fullName(_language)}',
   };
+}
+
+class _Switch extends StatelessWidget {
+  const _Switch({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Switch(value: value, onChanged: onChanged),
+      const SizedBox(width: 6),
+      Text(label),
+    ],
+  );
+}
+
+class _ZoomButtons extends StatelessWidget {
+  const _ZoomButtons({required this.controller});
+
+  final NepalMapController controller;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Zoom in',
+          icon: const Icon(Icons.add),
+          onPressed: controller.zoomIn,
+        ),
+        IconButton(
+          tooltip: 'Zoom out',
+          icon: const Icon(Icons.remove),
+          onPressed: controller.zoomOut,
+        ),
+        IconButton(
+          tooltip: 'Reset view',
+          icon: const Icon(Icons.center_focus_strong),
+          onPressed: controller.resetView,
+        ),
+      ],
+    ),
+  );
 }

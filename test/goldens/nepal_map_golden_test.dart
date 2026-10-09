@@ -41,6 +41,8 @@ void main() {
     }
   }
 
+  labelGoldens();
+
   testWidgets('scope gandaki', (tester) async {
     await pumpMap(
       tester,
@@ -60,6 +62,32 @@ void main() {
       matchesGoldenFile('images/scope_gandaki.png'),
     );
   });
+}
+
+// Labels render as boxes in tests (the Ahem test font); these goldens check
+// placement and collision avoidance, not the glyphs.
+void labelGoldens() {
+  for (final mode in [LabelMode.en, LabelMode.ne, LabelMode.both]) {
+    testWidgets('labels ${mode.name}', (tester) async {
+      await pumpMap(
+        tester,
+        RepaintBoundary(
+          child: ColoredBox(
+            color: Colors.white,
+            child: NepalMap(
+              level: AdminLevel.district,
+              labelMode: mode,
+              showAttribution: false,
+            ),
+          ),
+        ),
+      );
+      await expectLater(
+        find.byType(RepaintBoundary).first,
+        matchesGoldenFile('images/labels_${mode.name}.png'),
+      );
+    });
+  }
 }
 
 const _selected = <AdminLevel, Region>{

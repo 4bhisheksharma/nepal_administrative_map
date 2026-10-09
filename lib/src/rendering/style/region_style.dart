@@ -35,17 +35,30 @@ class RegionStyle {
 @immutable
 class RegionState {
   /// Creates a state.
-  const RegionState({this.isSelected = false});
+  const RegionState({
+    this.isSelected = false,
+    this.isHovered = false,
+    this.isHighlighted = false,
+  });
 
   /// Whether the region is selected.
   final bool isSelected;
 
-  @override
-  bool operator ==(Object other) =>
-      other is RegionState && other.isSelected == isSelected;
+  /// Whether the mouse is over the region (desktop and web).
+  final bool isHovered;
+
+  /// Whether the region was highlighted with `NepalMapController.highlight`.
+  final bool isHighlighted;
 
   @override
-  int get hashCode => isSelected.hashCode;
+  bool operator ==(Object other) =>
+      other is RegionState &&
+      other.isSelected == isSelected &&
+      other.isHovered == isHovered &&
+      other.isHighlighted == isHighlighted;
+
+  @override
+  int get hashCode => Object.hash(isSelected, isHovered, isHighlighted);
 }
 
 /// Decides how each region is drawn.

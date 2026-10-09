@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../data/loader/map_data_source.dart';
 import '../data/loader/nepal_map_data.dart';
@@ -9,11 +15,15 @@ import '../rendering/asset_map_data_source.dart';
 import '../rendering/geometry_cache.dart';
 import '../rendering/layers/border_layer.dart';
 import '../rendering/layers/highlight_layer.dart';
+import '../rendering/layers/label_layer.dart';
 import '../rendering/layers/region_fill_layer.dart';
+import '../rendering/map_camera.dart';
 import '../rendering/map_layer.dart';
 import '../rendering/map_plane.dart';
 import '../rendering/style/nepal_map_theme.dart';
 import '../rendering/style/region_style.dart';
+import 'nepal_map_controller.dart';
+import 'region_tooltip.dart';
 
 /// How tapping regions changes the selection.
 enum SelectionMode {
@@ -27,6 +37,38 @@ enum SelectionMode {
   multi,
 }
 
+/// Which names region labels show.
+enum LabelMode {
+  /// No labels.
+  none,
+
+  /// English names.
+  en,
+
+  /// Nepali names.
+  ne,
+
+  /// English with Nepali underneath.
+  both;
+
+  /// The label text for [region] in this mode, or `null` for [none].
+  String? textOf(Region region) {
+    final name = region.name;
+    return switch (this) {
+      none => null,
+      en => name.en,
+      ne => name.ne,
+      both => name.en == name.ne ? name.en : '${name.en}\n${name.ne}',
+    };
+  }
+}
+
+/// Builds a region's label text. Return `null` to hide its label.
+typedef RegionLabelBuilder = String? Function(
+  Region region,
+  MapLanguage language,
+);
+
 /// An interactive map of Nepal's provinces, districts or local levels.
 ///
 /// ```dart
@@ -37,20 +79,34 @@ enum SelectionMode {
 /// )
 /// ```
 ///
-/// Every parameter is optional; `NepalMap()` shows the 7 provinces.
+/// Every parameter is optional; `NepalMap()` shows the 7 provinces. Pinch,
+/// drag, double-tap and the mouse wheel zoom and pan; hovering shows a
+/// tooltip. Use a [NepalMapController] to drive it from code.
 class NepalMap extends StatefulWidget {
   /// Creates a map.
   const NepalMap({
     super.key,
+    this.controller,
     this.level = AdminLevel.province,
     this.scope,
+    this.drillDown = false,
+    this.onScopeChanged,
     this.style,
     this.onRegionTap,
+    this.onRegionHover,
     this.selectionMode = SelectionMode.single,
     this.selected,
     this.onSelectionChanged,
     this.language,
     this.strings,
+    this.labelMode,
+    this.labelBuilder,
+    this.showTooltips = true,
+    this.tooltipBuilder,
+    this.interactive = true,
+    this.minZoom = 1,
+    this.maxZoom = 40,
+    this.animationDuration = const Duration(milliseconds: 400),
     this.theme,
     this.padding = const EdgeInsets.all(8),
     this.placeholder,
@@ -74,12 +130,24 @@ class NepalMap extends StatefulWidget {
     MapDataSource source = const AssetMapDataSource(),
   }) => NepalMapData.load(source);
 
-  /// Which regions to draw.
+  /// Drives the map from code: selection, zoom, drill-down, language.
+  final NepalMapController? controller;
+
+  /// Which regions to draw (the starting level when [drillDown] is on).
   final AdminLevel level;
 
   /// Only show regions inside this province or district, zoomed to fit it.
   /// Must be a coarser level than [level].
   final Region? scope;
+
+  /// Whether tapping a province shows its districts, and tapping a district
+  /// its local levels. Taps select only at the local level. Go back with
+  /// [NepalMapController.drillUp], a [NepalMapBreadcrumb], or Esc.
+  final bool drillDown;
+
+  /// Called after drilling down or up, with the new scope (`null` for all
+  /// of Nepal).
+  final ValueChanged<Region?>? onScopeChanged;
 
   /// How each region is drawn. Defaults to [NepalMapTheme.defaultStyle].
   final RegionStyleBuilder? style;
@@ -87,22 +155,54 @@ class NepalMap extends StatefulWidget {
   /// Called when a region is tapped.
   final ValueChanged<Region>? onRegionTap;
 
+  /// Called when the mouse moves onto a region, or off all regions (`null`).
+  final ValueChanged<Region?>? onRegionHover;
+
   /// How taps change the selection.
   final SelectionMode selectionMode;
 
   /// The selected regions, if you manage the selection yourself. When
-  /// `null`, the map keeps its own selection.
+  /// `null`, the selection lives in the [controller] (or the map).
   final Set<Region>? selected;
 
   /// Called with the new selection after a tap changes it.
   final ValueChanged<Set<Region>>? onSelectionChanged;
 
-  /// The language for names and text. Defaults to the app's locale: Nepali
-  /// for `ne`, English otherwise.
+  /// The language for names and text. [NepalMapController.language] takes
+  /// precedence; otherwise defaults to the app's locale: Nepali for `ne`,
+  /// English otherwise.
   final MapLanguage? language;
 
   /// Replaces the built-in UI strings, whatever the [language].
   final NepalMapStrings? strings;
+
+  /// Which names labels show. Defaults to the active language; use
+  /// [LabelMode.none] to hide labels.
+  final LabelMode? labelMode;
+
+  /// Custom label text, overriding [labelMode]. Return `null` to hide a
+  /// region's label.
+  final RegionLabelBuilder? labelBuilder;
+
+  /// Whether to show a tooltip on hover (desktop, web) and long-press
+  /// (touch).
+  final bool showTooltips;
+
+  /// Builds the tooltip. Defaults to [RegionTooltip].
+  final RegionTooltipBuilder? tooltipBuilder;
+
+  /// Whether the user can zoom and pan. Taps and hover work either way.
+  final bool interactive;
+
+  /// Smallest zoom, relative to the fitted view (1 = whole view fits).
+  final double minZoom;
+
+  /// Largest zoom, relative to the fitted view.
+  final double maxZoom;
+
+  /// Length of zoom and drill-down animations. Animations are skipped when
+  /// the platform asks for reduced motion.
+  final Duration animationDuration;
 
   /// Colours and line widths. Defaults to [NepalMapTheme.of].
   final NepalMapTheme? theme;
@@ -134,19 +234,54 @@ class NepalMap extends StatefulWidget {
   State<NepalMap> createState() => _NepalMapState();
 }
 
-class _NepalMapState extends State<NepalMap> {
+class _NepalMapState extends State<NepalMap>
+    with SingleTickerProviderStateMixin
+    implements NepalMapDelegate {
   late Future<NepalMapData> _data;
-  Set<Region> _ownSelection = const {};
+  NepalMapController? _ownController;
+  NepalMapController get _controller => widget.controller ?? _ownController!;
+
+  /// The view being drawn. Trails the controller's view by one rebuild so a
+  /// scope change can animate from where the camera was.
+  MapScope? _shownView;
+
+  /// The camera; `null` means "fit the view".
+  MapCamera? _camera;
+
+  late final AnimationController _flightController =
+      AnimationController(vsync: this)
+        ..addListener(() => setState(() {}))
+        ..addStatusListener(_onFlightStatus);
+  CameraFlight? _flight;
+  MapCamera? _flightEnd;
+  Completer<void>? _flightDone;
+
+  // Inputs from the last build, for gesture handlers.
+  GeometryCache? _cache;
+  Size _size = Size.zero;
+
+  Region? _hovered;
+  ({Region region, Offset anchor})? _tooltip;
+  ({MapCamera camera, Offset focalPlane})? _gestureStart;
+  ({Duration time, Offset position})? _lastTap;
+  final _focusNode = FocusNode(debugLabel: 'NepalMap');
+
+  final _recordings = [LayerRecording(), LayerRecording(), LayerRecording()];
+  final _labelCache = LabelCache();
 
   /// Width / height of Nepal, used for sizing before the data has loaded.
   static const _nepalAspectRatio = 1.74;
+  static const _doubleTapTime = Duration(milliseconds: 300);
+  static const _doubleTapSlop = 40.0;
 
-  Set<Region> get _selection => widget.selected ?? _ownSelection;
+  MapScope get _widgetView => (level: widget.level, scope: widget.scope);
 
   @override
   void initState() {
     super.initState();
     _data = NepalMapData.load(widget.dataSource);
+    if (widget.controller == null) _ownController = NepalMapController();
+    _attach(_controller);
   }
 
   @override
@@ -155,12 +290,408 @@ class _NepalMapState extends State<NepalMap> {
     if (old.dataSource.cacheKey != widget.dataSource.cacheKey) {
       _data = NepalMapData.load(widget.dataSource);
     }
+    final oldController = old.controller ?? _ownController!;
+    if (widget.controller != old.controller) {
+      _detach(oldController);
+      if (widget.controller == null) {
+        _ownController ??= NepalMapController();
+      } else {
+        _ownController?.dispose();
+        _ownController = null;
+      }
+      _attach(_controller);
+    } else if (old.level != widget.level || old.scope != widget.scope) {
+      _adoptView(_widgetView);
+    }
+  }
+
+  // Detach on deactivate, not dispose: when a keyed map is replaced, the new
+  // one is mounted before the old one is disposed, and both would otherwise
+  // hold the controller at once.
+  @override
+  void deactivate() {
+    _detach(_controller);
+    super.deactivate();
   }
 
   @override
+  void activate() {
+    super.activate();
+    _attach(_controller);
+  }
+
+  @override
+  void dispose() {
+    _ownController?.dispose();
+    _flightController.dispose();
+    _flightDone?.complete();
+    _focusNode.dispose();
+    for (final r in _recordings) {
+      r.dispose();
+    }
+    _labelCache.dispose();
+    super.dispose();
+  }
+
+  void _attach(NepalMapController controller) {
+    controller.attach(this);
+    controller.addListener(_onControllerChanged);
+    controller.selection.addListener(_rebuild);
+    controller.highlighted.addListener(_rebuild);
+    _adoptView(_widgetView);
+  }
+
+  void _detach(NepalMapController controller) {
+    controller.removeListener(_onControllerChanged);
+    controller.selection.removeListener(_rebuild);
+    controller.highlighted.removeListener(_rebuild);
+    controller.detach(this);
+  }
+
+  /// Makes [view] the controller's view without animating. Listeners (e.g. a
+  /// breadcrumb) are told after the frame, since this runs during build.
+  void _adoptView(MapScope view) {
+    _shownView = view;
+    _camera = null;
+    if (_controller.adoptScope(view)) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _controller.notifyScopeAdopted();
+      });
+    }
+  }
+
+  void _rebuild() => setState(() {});
+
+  void _onControllerChanged() {
+    final view = (level: _controller.level, scope: _controller.scope);
+    if (view != _shownView) {
+      final cache = _cache;
+      final from = cache == null ? null : _absoluteCamera(cache);
+      _shownView = view;
+      _camera = null;
+      _hovered = null;
+      _tooltip = null;
+      if (cache != null && from != null) {
+        final content = cache.contentRect(view);
+        _fly(from, (content.center, _fitScale(content)), end: null);
+      }
+      widget.onScopeChanged?.call(view.scope);
+    }
+    setState(() {});
+  }
+
+  // ---------------------------------------------------------------------------
+  // Camera
+
+  double _fitScale(Rect content) =>
+      MapCamera.fitScale(content, _size, widget.padding);
+
+  MapCamera _currentCamera(GeometryCache cache) {
+    final content = cache.contentRect(_shownView!);
+    final flight = _flight;
+    if (flight == null) return _camera ?? MapCamera.fit(content);
+    final (center, scale) = flight.at(_flightCurve);
+    return MapCamera(center: center, zoom: scale / _fitScale(content));
+  }
+
+  (Offset, double) _absoluteCamera(GeometryCache cache) {
+    final camera = _currentCamera(cache);
+    return (
+      camera.center,
+      _fitScale(cache.contentRect(_shownView!)) * camera.zoom,
+    );
+  }
+
+  double get _flightCurve =>
+      Curves.easeInOutCubic.transform(_flightController.value);
+
+  ViewTransform _transform(GeometryCache cache) {
+    final content = cache.contentRect(_shownView!);
+    final flight = _flight;
+    if (flight == null) {
+      return (_camera ?? MapCamera.fit(content)).transform(
+        content,
+        _size,
+        widget.padding,
+      );
+    }
+    final (center, scale) = flight.at(_flightCurve);
+    final viewport = widget.padding.deflateRect(Offset.zero & _size).center;
+    return ViewTransform(scale, viewport - center * scale);
+  }
+
+  bool get _reduceMotion =>
+      MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
+  /// Animates from [from] to [to] (absolute centre and scale), then rests at
+  /// [end] (`null` = fitted).
+  Future<void> _fly(
+    (Offset, double) from,
+    (Offset, double) to, {
+    required MapCamera? end,
+  }) {
+    _flightDone?.complete();
+    _flightDone = null;
+    if (_reduceMotion || widget.animationDuration == Duration.zero) {
+      _flight = null;
+      _flightController.stop();
+      setState(() => _camera = end);
+      return Future.value();
+    }
+    _flight = CameraFlight(from, to);
+    _flightEnd = end;
+    final done = _flightDone = Completer<void>();
+    _flightController
+      ..duration = widget.animationDuration
+      ..forward(from: 0);
+    return done.future;
+  }
+
+  void _onFlightStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    setState(() {
+      _flight = null;
+      _camera = _flightEnd;
+    });
+    _flightDone?.complete();
+    _flightDone = null;
+  }
+
+  /// Stops any animation where it is, e.g. when the user starts a gesture.
+  void _stopFlight() {
+    final cache = _cache;
+    if (_flight == null || cache == null) return;
+    final camera = _currentCamera(cache);
+    _flightController.stop();
+    _flight = null;
+    _camera = camera;
+    _flightDone?.complete();
+    _flightDone = null;
+  }
+
+  Future<void> _flyTo(MapCamera target, {required bool animate}) {
+    final cache = _cache;
+    if (cache == null) return Future.value();
+    final content = cache.contentRect(_shownView!);
+    final end = target.clamp(content, widget.minZoom, widget.maxZoom);
+    if (!animate) {
+      _stopFlight();
+      setState(() => _camera = end);
+      return Future.value();
+    }
+    return _fly(_absoluteCamera(cache), (
+      end.center,
+      _fitScale(content) * end.zoom,
+    ), end: end);
+  }
+
+  @override
+  Future<void> zoomTo(Region region, {required bool animate}) {
+    final cache = _cache;
+    if (cache == null) return Future.value();
+    final content = cache.contentRect(_shownView!);
+    final target = cache.plane.rectOf(cache.data.shapeOf(region).bounds);
+    final zoom = _fitScale(target) / _fitScale(content);
+    return _flyTo(
+      MapCamera(center: target.center, zoom: zoom),
+      animate: animate,
+    );
+  }
+
+  @override
+  Future<void> resetView({required bool animate}) {
+    final cache = _cache;
+    if (cache == null) return Future.value();
+    return _flyTo(
+      MapCamera.fit(cache.contentRect(_shownView!)),
+      animate: animate,
+    );
+  }
+
+  @override
+  Future<void> zoomBy(double factor, {required bool animate}) {
+    final cache = _cache;
+    if (cache == null) return Future.value();
+    final camera = _currentCamera(cache);
+    return _flyTo(
+      MapCamera(center: camera.center, zoom: camera.zoom * factor),
+      animate: animate,
+    );
+  }
+
+  @override
+  Future<void> get settled => _flightDone?.future ?? Future.value();
+
+  // ---------------------------------------------------------------------------
+  // Input
+
+  Region? _regionAt(Offset position) {
+    final cache = _cache;
+    if (cache == null) return null;
+    final point = cache.plane.unproject(_transform(cache).toPlane(position));
+    final view = _shownView!;
+    final region = cache.data.regionAt(point, view.level);
+    return region != null && inScope(region, view.scope) ? region : null;
+  }
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (widget.drillDown) _focusNode.requestFocus();
+  }
+
+  void _onTapUp(TapUpDetails details, Duration timeStamp) {
+    final last = _lastTap;
+    _lastTap = (time: timeStamp, position: details.localPosition);
+    if (widget.interactive &&
+        last != null &&
+        timeStamp - last.time < _doubleTapTime &&
+        (details.localPosition - last.position).distance < _doubleTapSlop) {
+      _lastTap = null;
+      _zoomAround(details.localPosition, 2, animate: true);
+      return;
+    }
+
+    setState(() => _tooltip = null);
+    final region = _regionAt(details.localPosition);
+    if (region == null) return;
+    widget.onRegionTap?.call(region);
+    if (widget.drillDown && region.level != AdminLevel.localLevel) {
+      unawaited(_controller.drillDown(region));
+      return;
+    }
+    _applySelection(region);
+  }
+
+  void _applySelection(Region region) {
+    final current = widget.selected ?? _controller.selection.value;
+    final next = switch (widget.selectionMode) {
+      SelectionMode.none => null,
+      SelectionMode.single => current.contains(region) ? <Region>{} : {region},
+      SelectionMode.multi =>
+        current.contains(region)
+            ? ({...current}..remove(region))
+            : {...current, region},
+    };
+    if (next == null) return;
+    if (widget.selected == null) _controller.selectFromTap(next);
+    widget.onSelectionChanged?.call(next);
+  }
+
+  void _zoomAround(Offset screenPoint, double factor, {required bool animate}) {
+    final cache = _cache;
+    if (cache == null) return;
+    _stopFlight();
+    final content = cache.contentRect(_shownView!);
+    final camera = _currentCamera(cache);
+    final planePoint = _transform(cache).toPlane(screenPoint);
+    final target = MapCamera.anchored(
+      planePoint: planePoint,
+      screenPoint: screenPoint,
+      zoom: (camera.zoom * factor).clamp(widget.minZoom, widget.maxZoom),
+      content: content,
+      size: _size,
+      padding: widget.padding,
+    );
+    unawaited(_flyTo(target, animate: animate));
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (!widget.interactive || event is! PointerScrollEvent) return;
+    GestureBinding.instance.pointerSignalResolver.register(event, (event) {
+      final scroll = event as PointerScrollEvent;
+      _zoomAround(
+        scroll.localPosition,
+        math.pow(2, -scroll.scrollDelta.dy / 240).toDouble(),
+        animate: false,
+      );
+    });
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    final cache = _cache;
+    if (cache == null || !widget.interactive) return;
+    _stopFlight();
+    _gestureStart = (
+      camera: _currentCamera(cache),
+      focalPlane: _transform(cache).toPlane(details.localFocalPoint),
+    );
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    final cache = _cache;
+    final start = _gestureStart;
+    if (cache == null || start == null) return;
+    final content = cache.contentRect(_shownView!);
+    final camera = MapCamera.anchored(
+      planePoint: start.focalPlane,
+      screenPoint: details.localFocalPoint,
+      zoom: (start.camera.zoom * details.scale).clamp(
+        widget.minZoom,
+        widget.maxZoom,
+      ),
+      content: content,
+      size: _size,
+      padding: widget.padding,
+    ).clamp(content, widget.minZoom, widget.maxZoom);
+    setState(() {
+      _camera = camera;
+      _tooltip = null;
+    });
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) => _gestureStart = null;
+
+  void _onHover(PointerHoverEvent event) {
+    final region = _regionAt(event.localPosition);
+    final tooltip = widget.showTooltips && region != null
+        ? (region: region, anchor: event.localPosition)
+        : null;
+    if (region != _hovered) widget.onRegionHover?.call(region);
+    if (region != _hovered || tooltip != _tooltip) {
+      setState(() {
+        _hovered = region;
+        _tooltip = tooltip;
+      });
+    }
+  }
+
+  void _onExit(PointerExitEvent event) {
+    if (_hovered != null) widget.onRegionHover?.call(null);
+    if (_hovered != null || _tooltip != null) {
+      setState(() {
+        _hovered = null;
+        _tooltip = null;
+      });
+    }
+  }
+
+  void _onLongPress(LongPressStartDetails details) {
+    if (!widget.showTooltips) return;
+    final region = _regionAt(details.localPosition);
+    setState(
+      () => _tooltip = region == null
+          ? null
+          : (region: region, anchor: details.localPosition),
+    );
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape &&
+        _controller.scope != null) {
+      unawaited(_controller.drillUp());
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+
+  @override
   Widget build(BuildContext context) {
+    final view = _shownView!;
     assert(
-      widget.scope == null || widget.scope!.level.index < widget.level.index,
+      view.scope == null || view.scope!.level.index < view.level.index,
       'scope must be a coarser level than level, '
       'e.g. scope: Province.gandaki with level: AdminLevel.district',
     );
@@ -183,11 +714,10 @@ class _NepalMapState extends State<NepalMap> {
           );
         }
         final cache = GeometryCache.of(data);
-        final view = (level: widget.level, scope: widget.scope);
         final content = cache.contentRect(view);
         return _sized(
           content.width / content.height,
-          (size) => _buildMap(context, data, cache, view, size),
+          (size) => _buildMap(context, cache, size),
         );
       },
     );
@@ -207,103 +737,164 @@ class _NepalMapState extends State<NepalMap> {
         },
       );
 
-  Widget _buildMap(
-    BuildContext context,
-    NepalMapData data,
-    GeometryCache cache,
-    MapView view,
-    Size size,
-  ) {
-    final language =
-        widget.language ??
-        MapLanguage.fromLocaleCode(
-          Localizations.maybeLocaleOf(context)?.languageCode,
-        );
+  MapLanguage _language(BuildContext context) =>
+      _controller.language ??
+      widget.language ??
+      MapLanguage.fromLocaleCode(
+        Localizations.maybeLocaleOf(context)?.languageCode,
+      );
+
+  Widget _buildMap(BuildContext context, GeometryCache cache, Size size) {
+    _cache = cache;
+    _size = size;
+    final view = _shownView!;
+    final language = _language(context);
     final strings = widget.strings ?? NepalMapStrings.of(language);
     final theme = widget.theme ?? NepalMapTheme.of(context);
     final styleOf = widget.style ?? theme.defaultStyle;
-    final selection = _selection;
-    final transform = ViewTransform.fit(
-      cache.contentRect(view),
-      size,
-      widget.padding,
-    );
+    final selection = widget.selected ?? _controller.selection.value;
+    final highlighted = _controller.highlighted.value;
+    final regions = cache.regions(view);
+
+    final labelMode =
+        widget.labelMode ??
+        (language == MapLanguage.ne ? LabelMode.ne : LabelMode.en);
     final paintContext = MapPaintContext(
       cache: cache,
       view: view,
-      transform: transform,
+      transform: _transform(cache),
       theme: theme,
       language: language,
       styles: {
-        for (final region in cache.regions(view))
+        for (final region in regions)
           region: styleOf(
             region,
-            RegionState(isSelected: selection.contains(region)),
+            RegionState(
+              isSelected: selection.contains(region),
+              isHovered: region == _hovered,
+              isHighlighted: highlighted.contains(region),
+            ),
           ),
       },
+      labels: {
+        if (labelMode != LabelMode.none || widget.labelBuilder != null)
+          for (final region in regions)
+            if (_labelText(region, labelMode, language) case final text?)
+              region: text,
+      },
+      labelStyle: DefaultTextStyle.of(context).style
+          .merge(const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))
+          .merge(theme.labelStyle),
+    );
+
+    final layers = <MapLayer>[
+      const RegionFillLayer(),
+      const BorderLayer(),
+      const HighlightLayer(),
+      LabelLayer(_labelCache),
+    ];
+    Widget map = Stack(
+      fit: StackFit.expand,
+      children: [
+        for (final (i, layer) in layers.indexed)
+          RepaintBoundary(
+            child: CustomPaint(
+              painter: MapLayerPainter(
+                layer,
+                paintContext,
+                i < _recordings.length ? _recordings[i] : LayerRecording(),
+              ),
+            ),
+          ),
+        if (_tooltip case final tip?)
+          IgnorePointer(
+            child: CustomSingleChildLayout(
+              delegate: RegionTooltipPositionDelegate(tip.anchor),
+              child:
+                  widget.tooltipBuilder?.call(context, tip.region, language) ??
+                  RegionTooltip(region: tip.region, language: language),
+            ),
+          ),
+        if (widget.showAttribution)
+          Positioned(
+            right: 4,
+            bottom: 2,
+            child: _Attribution(
+              style: theme.attributionStyle,
+              onTap: widget.onAttributionTap,
+            ),
+          ),
+      ],
+    );
+
+    map = _TapWithTime(
+      onTapUp: _onTapUp,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPressStart: _onLongPress,
+        onScaleStart: widget.interactive ? _onScaleStart : null,
+        onScaleUpdate: widget.interactive ? _onScaleUpdate : null,
+        onScaleEnd: widget.interactive ? _onScaleEnd : null,
+        child: map,
+      ),
     );
 
     return Semantics(
       container: true,
-      label: widget.scope?.fullName(language) ?? strings.country,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapUp: (details) =>
-            _handleTap(data, cache, transform, details.localPosition),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            for (final layer in const [
-              RegionFillLayer(),
-              BorderLayer(),
-              HighlightLayer(),
-            ])
-              RepaintBoundary(
-                child: CustomPaint(
-                  painter: MapLayerPainter(layer, paintContext),
-                ),
-              ),
-            if (widget.showAttribution)
-              Positioned(
-                right: 4,
-                bottom: 2,
-                child: _Attribution(
-                  style: theme.attributionStyle,
-                  onTap: widget.onAttributionTap,
-                ),
-              ),
-          ],
+      label: view.scope?.fullName(language) ?? strings.country,
+      child: Focus(
+        focusNode: _focusNode,
+        onKeyEvent: _onKey,
+        child: Listener(
+          onPointerDown: _onPointerDown,
+          onPointerSignal: _onPointerSignal,
+          child: MouseRegion(
+            cursor: _hovered != null
+                ? SystemMouseCursors.click
+                : MouseCursor.defer,
+            onHover: _onHover,
+            onExit: _onExit,
+            child: map,
+          ),
         ),
       ),
     );
   }
 
-  void _handleTap(
-    NepalMapData data,
-    GeometryCache cache,
-    ViewTransform transform,
-    Offset position,
-  ) {
-    final point = cache.plane.unproject(transform.toPlane(position));
-    final region = data.regionAt(point, widget.level);
-    if (region == null || !inScope(region, widget.scope)) return;
+  String? _labelText(Region region, LabelMode mode, MapLanguage language) =>
+      widget.labelBuilder != null
+      ? widget.labelBuilder!(region, language)
+      : mode.textOf(region);
+}
 
-    widget.onRegionTap?.call(region);
-    final current = _selection;
-    final next = switch (widget.selectionMode) {
-      SelectionMode.none => current,
-      SelectionMode.single => current.contains(region) ? <Region>{} : {region},
-      SelectionMode.multi =>
-        current.contains(region)
-            ? ({...current}..remove(region))
-            : {...current, region},
-    };
-    if (identical(next, current)) return;
-    if (widget.selected == null) {
-      setState(() => _ownSelection = Set.unmodifiable(next));
-    }
-    widget.onSelectionChanged?.call(next);
-  }
+/// A tap recognizer that also reports the pointer-down time stamp, for
+/// double-tap detection without delaying single taps.
+///
+/// Flutter's `onDoubleTap` holds every single tap back until the double-tap
+/// window closes; here the first tap acts at once and a quick second tap
+/// zooms instead.
+class _TapWithTime extends StatefulWidget {
+  const _TapWithTime({required this.onTapUp, required this.child});
+
+  final void Function(TapUpDetails details, Duration timeStamp) onTapUp;
+  final Widget child;
+
+  @override
+  State<_TapWithTime> createState() => _TapWithTimeState();
+}
+
+class _TapWithTimeState extends State<_TapWithTime> {
+  Duration _downTime = Duration.zero;
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (event) => _downTime = event.timeStamp,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapUp: (details) => widget.onTapUp(details, _downTime),
+      child: widget.child,
+    ),
+  );
 }
 
 class _Attribution extends StatelessWidget {
