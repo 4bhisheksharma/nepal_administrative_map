@@ -275,6 +275,12 @@ The map shows a small credit line by default. If you hide it
 example on an About screen, using `NepalMap.attribution` and
 `NepalMap.attributionUrl`.
 
+## License
+
+- **Code:** MIT. See [LICENSE](LICENSE).
+- **Map data** (`assets/maps/`, and the region names and codes): CC BY 4.0,
+  from OKNP LocalBoundaries. See [DATA_LICENSE.md](DATA_LICENSE.md).
+
 ## FAQ
 
 **Nepali labels show boxes or look wrong.** The package doesn't bundle a

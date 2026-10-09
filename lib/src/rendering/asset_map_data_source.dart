@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
+
 import '../data/loader/map_data_source.dart';
 
 /// Loads the map data bundled with this package.

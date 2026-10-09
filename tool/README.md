@@ -57,6 +57,24 @@ Codes: `P{province}`, `D{province}{nn}`, `L{province}{nn}{mm}`, `PA{nn}`.
 District and local-level numbers were assigned alphabetically within their
 parent when the file was first created.
 
-Nepali names: take them from the government's official list of local levels.
-Don't copy them in bulk from OpenStreetMap or Wikipedia: their share-alike
-licenses would then apply to this data.
+## Adding Nepali names
+
+Take them from the government's official list of local levels (MoFAGA /
+sthaniya.gov.np, or Census 2021 / NSO). Don't copy them in bulk from
+OpenStreetMap or Wikipedia: their share-alike licenses would then apply to
+this data.
+
+Save the list as a CSV with a `name_ne` column, plus either our `code` or
+`district` and `name_en` (districts in English, in any spelling `names.csv`
+knows, or in Nepali). Then:
+
+```sh
+dart run tool/merge_ne_names.dart list.csv              # report: matches, typos, unmatched rows, conflicts
+dart run tool/merge_ne_names.dart list.csv --apply      # write names.csv (status: draft)
+dart run tool/build_data.dart --strict                  # rebuild; fails if any name is still missing
+```
+
+Type words (गाउँपालिका, नगरपालिका, "Rural Municipality", …) are stripped, and
+small spelling differences within a district are matched and listed for you
+to check. Conflicting rows are never applied. Mark names `verified` (by hand,
+or with `--status=verified`) once a native speaker has reviewed them.

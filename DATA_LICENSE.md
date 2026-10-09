@@ -4,7 +4,8 @@ The boundary data in `assets/maps/nepal.topo.json` and the region names and
 codes in `lib/src/data/models/region.g.dart` are licensed under
 [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 
-The package's source code is licensed separately; see [LICENSE](LICENSE).
+The package's source code is licensed separately under the MIT License; see
+[LICENSE](LICENSE).
 
 ## Source
 

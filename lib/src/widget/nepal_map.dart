@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+
 import '../data/loader/map_data_source.dart';
 import '../data/loader/nepal_map_data.dart';
 import '../data/models/region.dart';
