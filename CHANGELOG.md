@@ -1,3 +1,8 @@
+## 0.0.2
+
+* README: screenshots and links now use absolute GitHub URLs, so they show
+  on pub.dev.
+
 ## 0.0.1
 
 First public release (release candidate for 0.0.1).

@@ -1,7 +1,7 @@
 # nepal_administrative_map
 
 [![pub package](https://img.shields.io/pub/v/nepal_administrative_map.svg)](https://pub.dev/packages/nepal_administrative_map)
-[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/4bhisheksharma/nepal_administrative_map/blob/main/LICENSE)
 
 An interactive administrative map of Nepal for Flutter: **7 provinces,
 77 districts and 753 local levels**, in **English and Nepali (नेपाली)**.
@@ -21,11 +21,11 @@ An interactive administrative map of Nepal for Flutter: **7 provinces,
 
 | Provinces in Nepali | Dark mode |
 |---|---|
-| ![Provinces coloured by area, in Nepali](assets/screenshots/provinces_nepali.jpg) | ![Province map in dark mode](assets/screenshots/provinces_dark.jpg) |
+| ![Provinces coloured by area, in Nepali](https://raw.githubusercontent.com/4bhisheksharma/nepal_administrative_map/main/assets/screenshots/provinces_nepali.jpg) | ![Province map in dark mode](https://raw.githubusercontent.com/4bhisheksharma/nepal_administrative_map/main/assets/screenshots/provinces_dark.jpg) |
 | **Overlays and bilingual labels** | **All 77 districts** |
-| ![Protected areas, city markers and bilingual labels](assets/screenshots/overlays_bilingual.jpg) | ![Districts with English and Nepali labels](assets/screenshots/districts_bilingual.jpg) |
+| ![Protected areas, city markers and bilingual labels](https://raw.githubusercontent.com/4bhisheksharma/nepal_administrative_map/main/assets/screenshots/overlays_bilingual.jpg) | ![Districts with English and Nepali labels](https://raw.githubusercontent.com/4bhisheksharma/nepal_administrative_map/main/assets/screenshots/districts_bilingual.jpg) |
 | **Local levels by type** | |
-| ![Local levels coloured by type, with a tooltip](assets/screenshots/local_level_types.jpg) | |
+| ![Local levels coloured by type, with a tooltip](https://raw.githubusercontent.com/4bhisheksharma/nepal_administrative_map/main/assets/screenshots/local_level_types.jpg) | |
 
 ## Quick start
 
@@ -64,7 +64,7 @@ class MyApp extends StatelessWidget {
 **3. Run it.** That's all: no assets to register, no keys, nothing to
 download. Tap a district to select it; pinch or scroll to zoom.
 
-The full demo app is in [`example/`](example/lib/main.dart).
+The full demo app is in [`example/`](https://github.com/4bhisheksharma/nepal_administrative_map/blob/main/example/lib/main.dart).
 
 ## Common setups
 
@@ -341,7 +341,7 @@ local-level maps they are drawn in a muted colour and can't be tapped.
 Boundary data: **© [OKNP LocalBoundaries](https://localboundries.oknp.org/)**,
 licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 The data has been simplified and extended with codes and Nepali names; see
-[DATA_LICENSE.md](DATA_LICENSE.md) for the full list of changes.
+[DATA_LICENSE.md](https://github.com/4bhisheksharma/nepal_administrative_map/blob/main/DATA_LICENSE.md) for the full list of changes.
 
 The map shows a small credit line in the corner:
 
@@ -357,9 +357,9 @@ The map shows a small credit line in the corner:
 
 ## License
 
-- **Code:** MIT. See [LICENSE](LICENSE).
+- **Code:** MIT. See [LICENSE](https://github.com/4bhisheksharma/nepal_administrative_map/blob/main/LICENSE).
 - **Map data** (`assets/maps/`, and the region names and codes): CC BY 4.0,
-  from OKNP LocalBoundaries. See [DATA_LICENSE.md](DATA_LICENSE.md).
+  from OKNP LocalBoundaries. See [DATA_LICENSE.md](https://github.com/4bhisheksharma/nepal_administrative_map/blob/main/DATA_LICENSE.md).
 
 ## FAQ
 

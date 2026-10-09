@@ -28,4 +28,4 @@ void main() => runApp(
     );
 ```
 
-See [`lib/main.dart`](lib/main.dart) for the full demo.
+See [`lib/main.dart`](https://github.com/4bhisheksharma/nepal_administrative_map/blob/main/example/lib/main.dart) for the full demo.
