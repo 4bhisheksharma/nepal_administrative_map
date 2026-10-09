@@ -3,6 +3,7 @@
 .idea/
 *.iml
 build/
+doc/api/
 /pubspec.lock
 /plan
 .github/
@@ -20,3 +21,5 @@ example/android/
 example/ios/
 example/macos/
 example/web/
+
+.DS_Store

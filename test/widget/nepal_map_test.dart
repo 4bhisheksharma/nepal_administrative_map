@@ -231,13 +231,35 @@ void main() {
     testWidgets('shown by default and tappable', (tester) async {
       var taps = 0;
       await pumpMap(tester, NepalMap(onAttributionTap: () => taps++));
-      await tester.tap(find.text(NepalMap.attribution));
+      await tester.tap(find.text(NepalMap.attributionText()));
       expect(taps, 1);
+    });
+
+    testWidgets('names the package author, which can be turned off', (
+      tester,
+    ) async {
+      await pumpMap(tester, const NepalMap(key: Key('with')));
+      expect(
+        find.text(
+          'Map © Abhishek Sharma · Boundary data © OKNP LocalBoundaries, CC BY 4.0',
+        ),
+        findsOneWidget,
+      );
+      await pumpMap(
+        tester,
+        const NepalMap(key: Key('without'), showPackageCredit: false),
+      );
+      expect(
+        find.text(NepalMap.attribution),
+        findsOneWidget,
+        reason: 'the data credit stays',
+      );
+      expect(find.textContaining('Abhishek'), findsNothing);
     });
 
     testWidgets('can be hidden', (tester) async {
       await pumpMap(tester, const NepalMap(showAttribution: false));
-      expect(find.text(NepalMap.attribution), findsNothing);
+      expect(find.textContaining('OKNP'), findsNothing);
     });
   });
 

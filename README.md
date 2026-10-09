@@ -1,56 +1,129 @@
 # nepal_administrative_map
 
+[![pub package](https://img.shields.io/pub/v/nepal_administrative_map.svg)](https://pub.dev/packages/nepal_administrative_map)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 An interactive administrative map of Nepal for Flutter: **7 provinces,
-77 districts and 753 local levels**, in **English and Nepali**.
+77 districts and 753 local levels**, in **English and Nepali (नेपाली)**.
 
-- No third-party dependencies, works offline: one 422 KB data file is bundled.
-- Typed regions (`District.kaski`, `LocalLevel.pokhara`) with stable codes
-  and names in both languages.
-- Zoom, pan, hover tooltips, labels in English and/or Nepali, drill-down
-  from provinces to local levels, and a controller to drive it all.
-- Tap to select, scope to one province or district, theme with your app's
-  colours (light and dark).
-- A pure-Dart core for server and CLI use: point lookup, name and number
-  formatting, no Flutter needed.
+- **One line to start:** `NepalMap()` works with no setup, no API keys and
+  no internet. The data (422 KB) is bundled.
+- **Bilingual:** names, labels, tooltips, legends and numbers
+  (`१७,४४,२४०`) in English or Nepali, following your app's locale.
+- **Interactive:** zoom, pan, tap to select, hover tooltips, and drill-down
+  from provinces to districts to local levels.
+- **Data maps:** colour regions by your data (choropleth) with a legend,
+  add markers, and search places by name.
+- **Typed regions:** `District.kaski`, `LocalLevel.pokhara`, with stable
+  codes, so your data joins cleanly.
+- **Light and dark**, screen-reader and keyboard friendly, and no
+  dependencies besides Flutter.
 
-| Districts | Local levels (dark) |
+| Provinces in Nepali | Dark mode |
 |---|---|
-| ![District map](doc/screenshots/districts.png) | ![Local-level map](doc/screenshots/local_levels_dark.png) |
+| ![Provinces coloured by area, in Nepali](assets/screenshots/provinces_nepali.jpg) | ![Province map in dark mode](assets/screenshots/provinces_dark.jpg) |
+| **Overlays and bilingual labels** | **All 77 districts** |
+| ![Protected areas, city markers and bilingual labels](assets/screenshots/overlays_bilingual.jpg) | ![Districts with English and Nepali labels](assets/screenshots/districts_bilingual.jpg) |
+| **Local levels by type** | |
+| ![Local levels coloured by type, with a tooltip](assets/screenshots/local_level_types.jpg) | |
 
-## Install
+## Quick start
+
+**1. Add the package**
 
 ```sh
 flutter pub add nepal_administrative_map
 ```
 
-## Usage
+**2. Show the map**
 
 ```dart
+import 'package:flutter/material.dart';
 import 'package:nepal_administrative_map/nepal_administrative_map.dart';
 
-// The 7 provinces, tap to select.
+void main() => runApp(const MyApp());
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Nepal')),
+        body: NepalMap(
+          level: AdminLevel.district,
+          onRegionTap: (region) => debugPrint(region.fullName(MapLanguage.en)),
+        ),
+      ),
+    );
+  }
+}
+```
+
+**3. Run it.** That's all: no assets to register, no keys, nothing to
+download. Tap a district to select it; pinch or scroll to zoom.
+
+The full demo app is in [`example/`](example/lib/main.dart).
+
+## Common setups
+
+Copy the one closest to what you need:
+
+```dart
+// Provinces (the default), tap to select.
 const NepalMap();
 
-// Districts of Gandaki, in Nepali.
+// Tap a province to see its districts, then a district's local levels.
+NepalMap(drillDown: true);
+
+// Only Gandaki's districts, in Nepali.
+const NepalMap(level: AdminLevel.district, scope: Province.gandaki, language: MapLanguage.ne);
+
+// Colour districts by your data, with a legend.
 NepalMap(
   level: AdminLevel.district,
-  scope: Province.gandaki,
-  language: MapLanguage.ne,
-  onRegionTap: (region) => print(region.fullName(MapLanguage.ne)),
+  choropleth: Choropleth(
+    values: {District.kathmandu: 1744240, District.lalitpur: 548401},
+    scale: ColorScale.sequential(Colors.amber.shade50, Colors.deepOrange.shade800),
+    title: const LocalizedName('Population', 'जनसंख्या'),
+  ),
 );
 
 // Your own colours.
 NepalMap(
-  level: AdminLevel.localLevel,
   style: (region, state) => RegionStyle(
     fill: state.isSelected ? Colors.orange : Colors.green.shade100,
     outline: state.isSelected ? Colors.deepOrange : null,
   ),
 );
+
+// Markers.
+NepalMap(markers: [MapMarker(point: const LatLng(27.7043, 85.3070), child: const Icon(Icons.place))]);
+
+// Drive it from code: select, zoom, switch language, export.
+final controller = NepalMapController();
+NepalMap(controller: controller);
+controller.zoomTo(District.kaski);
+controller.language = MapLanguage.ne;
 ```
 
 The map fills the space it's given. With unbounded height (e.g. in a
-`Column` inside a scroll view) it keeps Nepal's aspect ratio.
+`Column` inside a scroll view) it keeps Nepal's shape.
+
+| I want to… | See |
+|---|---|
+| Zoom, pan, drill down, add a breadcrumb | [Zoom, pan and drill-down](#zoom-pan-and-drill-down) |
+| Select, highlight or zoom from code | [Controller](#controller) |
+| Colour regions by my data | [Choropleth maps](#choropleth-maps) |
+| Put pins on the map | [Markers](#markers) |
+| Find a place by name | [Search](#search) |
+| Find which municipality a GPS point is in | [Which local level is this point in?](#which-local-level-is-this-point-in) |
+| Change colours or fonts | [Theme](#theme) |
+| Use Nepali | [Language](#language) |
+| Save the map as an image | [Export](#export) |
+
+## Guide
 
 ### Zoom, pan and drill-down
 
@@ -270,10 +343,17 @@ licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 The data has been simplified and extended with codes and Nepali names; see
 [DATA_LICENSE.md](DATA_LICENSE.md) for the full list of changes.
 
-The map shows a small credit line by default. If you hide it
-(`showAttribution: false`), credit the data elsewhere in your app, for
-example on an About screen, using `NepalMap.attribution` and
-`NepalMap.attributionUrl`.
+The map shows a small credit line in the corner:
+
+> Map © Abhishek Sharma · Boundary data © OKNP LocalBoundaries, CC BY 4.0
+
+- `showPackageCredit: false` drops the author's name and keeps the data
+  credit.
+- `showAttribution: false` hides the whole line. The data license still
+  requires credit, so show `NepalMap.attribution` somewhere else in your
+  app (e.g. an About screen); `NepalMap.attributionUrl` links to the
+  license.
+- `onAttributionTap` makes the line tappable, e.g. to open the license.
 
 ## License
 

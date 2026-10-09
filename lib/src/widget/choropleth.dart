@@ -103,16 +103,30 @@ class Choropleth {
   /// has no colour for it.
   Color? colorOf(Region region) => scale.colorOf(values[region], extent);
 
-  /// [value] formatted for [language].
-  String format(Object value, MapLanguage language) =>
-      formatter?.call(value, language) ??
-      (value is num
-          ? NepalNumberFormat.format(
-              value,
-              language: language,
-              grouping: grouping,
-            )
-          : value.toString());
+  /// [value] formatted for [language]: numbers with [NepalNumberFormat],
+  /// categories with their label.
+  String format(Object value, MapLanguage language) {
+    if (formatter case final f?) return f(value, language);
+    if (value is num) {
+      return NepalNumberFormat.format(
+        value,
+        language: language,
+        grouping: grouping,
+      );
+    }
+    // Categories: the legend's label, then the value's own label, then its name.
+    if (scale case CategoricalScale(:final labels?)
+        when labels[value] != null) {
+      return labels[value]!.of(language);
+    }
+    return switch (value) {
+      LocalLevelType(:final label) ||
+      ProtectedAreaType(:final label) ||
+      AdminLevel(:final label) => label.of(language),
+      final Enum e => e.name,
+      _ => value.toString(),
+    };
+  }
 
   /// The style a map uses for this choropleth when `NepalMap.style` isn't
   /// set: the scale's colour (or [NepalMapTheme.noDataFill]), darkened a

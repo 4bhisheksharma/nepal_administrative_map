@@ -113,6 +113,32 @@ void main() {
       expect(find.byType(NepalMapLegend), findsNothing);
     });
 
+    test('categories format as their labels, not enum names', () {
+      const c = Choropleth(
+        values: {LocalLevel.pokhara: LocalLevelType.metropolitan},
+        scale: ColorScale.categorical({
+          LocalLevelType.metropolitan: Colors.purple,
+        }),
+      );
+      expect(
+        c.format(LocalLevelType.municipality, MapLanguage.en),
+        'Municipality',
+      );
+      expect(
+        c.format(LocalLevelType.municipality, MapLanguage.ne),
+        'नगरपालिका',
+      );
+      const labelled = Choropleth(
+        values: {District.kaski: 'hill'},
+        scale: ColorScale.categorical(
+          {'hill': Colors.green},
+          labels: {'hill': LocalizedName('Hill', 'पहाड')},
+        ),
+      );
+      expect(labelled.format('hill', MapLanguage.ne), 'पहाड');
+      expect(labelled.format(SelectionMode.multi, MapLanguage.en), 'multi');
+    });
+
     test('byCode joins codes and rejects unknown ones', () {
       final c = Choropleth.byCode(const {
         'D305': 1,

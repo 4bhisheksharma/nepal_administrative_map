@@ -121,6 +121,7 @@ class NepalMap extends StatefulWidget {
     this.placeholder,
     this.errorBuilder,
     this.showAttribution = true,
+    this.showPackageCredit = true,
     this.onAttributionTap,
     this.dataSource = const AssetMapDataSource(),
     this.choropleth,
@@ -133,6 +134,15 @@ class NepalMap extends StatefulWidget {
   /// Credit line for the boundary data, required by its CC BY 4.0 license.
   static const String attribution =
       'Boundary data © OKNP LocalBoundaries, CC BY 4.0';
+
+  /// Credit for this package's author. Optional: hide it with
+  /// [showPackageCredit].
+  static const String packageCredit = 'Map © Abhishek Sharma';
+
+  /// The full credit line as shown on the map: the [packageCredit] (unless
+  /// [includePackageCredit] is false) and the data [attribution].
+  static String attributionText({bool includePackageCredit = true}) =>
+      includePackageCredit ? '$packageCredit · $attribution' : attribution;
 
   /// Link to the data license.
   static const String attributionUrl =
@@ -236,12 +246,18 @@ class NepalMap extends StatefulWidget {
   /// Shown if the data fails to load. Defaults to an empty box.
   final Widget Function(BuildContext context, Object error)? errorBuilder;
 
-  /// Whether to show the [attribution] line in the bottom corner.
+  /// Whether to show the credit line ([attributionText]) in the bottom
+  /// corner.
   ///
   /// The boundary data's CC BY 4.0 license requires credit. If you hide this
   /// line, credit the data elsewhere in your app (e.g. an About screen)
   /// using [attribution] and [attributionUrl].
   final bool showAttribution;
+
+  /// Whether the credit line also names the package's author
+  /// ([packageCredit]). Turning it off keeps the data credit, which the
+  /// license requires.
+  final bool showPackageCredit;
 
   /// Called when the attribution line is tapped, e.g. to open
   /// [attributionUrl]. When `null` the line isn't tappable.
@@ -1133,6 +1149,9 @@ class _NepalMapState extends State<NepalMap>
             right: 4,
             bottom: 2,
             child: _Attribution(
+              text: NepalMap.attributionText(
+                includePackageCredit: widget.showPackageCredit,
+              ),
               style: theme.attributionStyle,
               onTap: widget.onAttributionTap,
             ),
@@ -1239,8 +1258,7 @@ class _NepalMapState extends State<NepalMap>
       {
         if (labelMode != LabelMode.none || widget.labelBuilder != null)
           for (final region in regions)
-            if (_labelText(region, labelMode, language) case final text?)
-              region: text,
+            region: ?_labelText(region, labelMode, language),
       },
       {
         if (widget.showProtectedAreas && labelMode != LabelMode.none)
@@ -1359,16 +1377,21 @@ class _TapWithTimeState extends State<_TapWithTime> {
 }
 
 class _Attribution extends StatelessWidget {
-  const _Attribution({required this.style, required this.onTap});
+  const _Attribution({
+    required this.text,
+    required this.style,
+    required this.onTap,
+  });
 
+  final String text;
   final TextStyle? style;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final text = Text(
-      NepalMap.attribution,
+    final label = Text(
+      text,
       style:
           style ??
           theme.textTheme.labelSmall?.copyWith(
@@ -1381,10 +1404,10 @@ class _Attribution extends StatelessWidget {
       container: true,
       link: onTap != null,
       child: onTap == null
-          ? text
+          ? label
           : MouseRegion(
               cursor: SystemMouseCursors.click,
-              child: GestureDetector(onTap: onTap, child: text),
+              child: GestureDetector(onTap: onTap, child: label),
             ),
     );
   }

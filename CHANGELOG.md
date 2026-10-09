@@ -1,9 +1,11 @@
-## Unreleased
+## 0.0.1
 
-* Fix: the map could stay blank on first launch when `NepalMap.preload()`
-  ran in `main()` before `runApp()`. Loading the bundled asset now sets up
-  Flutter's services first; a map whose load fails retries once; and the
-  error names the asset path apps use.
+First public release (release candidate for 0.0.1).
+
+* The credit line now names the package author ("Map © Abhishek Sharma")
+  next to the required data credit; `showPackageCredit: false` drops the
+  author part, and `NepalMap.packageCredit` / `NepalMap.attributionText()`
+  give the text.
 * Accessibility: a screen-reader node per visible region (name, parent and
   value in the active language, with a tap action); keyboard navigation
   (Tab, arrow keys, Enter/Space, Esc, `+`/`-`) with a focus ring

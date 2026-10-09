@@ -62,6 +62,7 @@ class _MapPageState extends State<MapPage> {
   bool _bilingualLabels = false;
   bool _protectedAreas = false;
   bool _cityMarkers = false;
+  bool _authorCredit = true;
   ColourBy _colourBy = ColourBy.nothing;
   NepalMapData? _data;
   Region? _tapped;
@@ -142,6 +143,11 @@ class _MapPageState extends State<MapPage> {
                   label: _ne ? 'शहरहरू' : 'Cities',
                   value: _cityMarkers,
                   onChanged: (v) => setState(() => _cityMarkers = v),
+                ),
+                _Switch(
+                  label: _ne ? 'क्रेडिट' : 'Credit',
+                  value: _authorCredit,
+                  onChanged: (v) => setState(() => _authorCredit = v),
                 ),
                 DropdownButton<ColourBy>(
                   value: _colourBy,
@@ -234,6 +240,7 @@ class _MapPageState extends State<MapPage> {
                         _drillDown ? _controller.level : _level,
                       ),
                       showProtectedAreas: _protectedAreas,
+                      showPackageCredit: _authorCredit,
                       markers: [
                         if (_cityMarkers)
                           for (final (en, ne, point) in cities)

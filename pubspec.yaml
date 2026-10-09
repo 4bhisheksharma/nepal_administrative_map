@@ -1,16 +1,22 @@
 name: nepal_administrative_map
-description: A comprehensive, interactive, and data-driven mapping package for Nepal, covering all 7 provinces, 77 districts and 753 local levels, in English and Nepali.
-version: 0.1.0
+description: Interactive, bilingual (English/Nepali) map of Nepal's 7 provinces, 77 districts and 753 local levels, with zoom, drill-down, choropleths and search.
+version: 0.0.1
 homepage: https://github.com/4bhisheksharma/nepal_administrative_map
 repository: https://github.com/4bhisheksharma/nepal_administrative_map
 issue_tracker: https://github.com/4bhisheksharma/nepal_administrative_map/issues
 topics: [map, nepal, geography, i18n, visualization]
 
 screenshots:
-  - description: District map with Kaski selected.
-    path: doc/screenshots/districts.png
-  - description: All 753 local levels in dark mode.
-    path: doc/screenshots/local_levels_dark.png
+  - description: Provinces coloured by area, in Nepali.
+    path: assets/screenshots/provinces_nepali.jpg
+  - description: Province map in dark mode with an area choropleth.
+    path: assets/screenshots/provinces_dark.jpg
+  - description: Bilingual labels, protected areas, city markers and a local-level-count choropleth.
+    path: assets/screenshots/overlays_bilingual.jpg
+  - description: All 77 districts with English and Nepali labels.
+    path: assets/screenshots/districts_bilingual.jpg
+  - description: Local levels coloured by type, with a tooltip and legend.
+    path: assets/screenshots/local_level_types.jpg
 
 environment:
   sdk: ^3.13.3
@@ -23,7 +29,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
   leak_tracker_flutter_testing: any # version pinned by flutter_test
 
 flutter:
