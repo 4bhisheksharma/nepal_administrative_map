@@ -20,6 +20,14 @@ class RegionStyle {
   /// Width of [outline] in logical pixels.
   final double outlineWidth;
 
+  /// A copy with the given fields replaced.
+  RegionStyle copyWith({Color? fill, Color? outline, double? outlineWidth}) =>
+      RegionStyle(
+        fill: fill ?? this.fill,
+        outline: outline ?? this.outline,
+        outlineWidth: outlineWidth ?? this.outlineWidth,
+      );
+
   @override
   bool operator ==(Object other) =>
       other is RegionStyle &&
@@ -39,6 +47,7 @@ class RegionState {
     this.isSelected = false,
     this.isHovered = false,
     this.isHighlighted = false,
+    this.isFocused = false,
     this.value,
   });
 
@@ -51,6 +60,10 @@ class RegionState {
   /// Whether the region was highlighted with `NepalMapController.highlight`.
   final bool isHighlighted;
 
+  /// Whether the region has keyboard focus (shown only while the keyboard is
+  /// in use).
+  final bool isFocused;
+
   /// The region's value on a choropleth map, or `null` without one.
   final Object? value;
 
@@ -60,10 +73,12 @@ class RegionState {
       other.isSelected == isSelected &&
       other.isHovered == isHovered &&
       other.isHighlighted == isHighlighted &&
+      other.isFocused == isFocused &&
       other.value == value;
 
   @override
-  int get hashCode => Object.hash(isSelected, isHovered, isHighlighted, value);
+  int get hashCode =>
+      Object.hash(isSelected, isHovered, isHighlighted, isFocused, value);
 }
 
 /// Decides how each region is drawn.

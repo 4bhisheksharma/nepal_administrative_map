@@ -1,10 +1,10 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 
 import '../data/models/region.dart';
 import '../i18n/map_language.dart';
-
-/// Which regions a map shows: a level, optionally inside one region.
-typedef MapScope = ({AdminLevel level, Region? scope});
+import '../rendering/geometry_cache.dart';
 
 /// What a controller needs from the map it's attached to.
 abstract interface class NepalMapDelegate {
@@ -19,6 +19,9 @@ abstract interface class NepalMapDelegate {
 
   /// Waits for the camera animation started by a scope change, if any.
   Future<void> get settled;
+
+  /// Renders the map as it is on screen.
+  Future<ui.Image> toImage({required double pixelRatio});
 }
 
 /// Controls a [NepalMap] from outside: selection, highlights, zoom,
@@ -47,7 +50,7 @@ class NepalMapController extends ChangeNotifier {
   final ValueNotifier<Set<Region>> _selection;
   final ValueNotifier<Set<Region>> _highlighted = ValueNotifier(const {});
   MapLanguage? _language;
-  MapScope _view = (level: AdminLevel.province, scope: null);
+  MapView _view = (level: AdminLevel.province, scope: null);
   NepalMapDelegate? _map;
 
   /// The selected regions.
@@ -116,6 +119,29 @@ class NepalMapController extends ChangeNotifier {
   Future<void> zoomOut({bool animate = true}) async =>
       _map?.zoomBy(0.5, animate: animate);
 
+  /// Renders the map as currently shown (including the legend, markers and
+  /// attribution) at [pixelRatio] times its logical size.
+  ///
+  /// Throws a [StateError] if no map is attached.
+  Future<ui.Image> toImage({double pixelRatio = 1}) {
+    final map = _map;
+    if (map == null) {
+      throw StateError('No NepalMap is attached to this controller.');
+    }
+    return map.toImage(pixelRatio: pixelRatio);
+  }
+
+  /// Renders the map as PNG bytes, e.g. to save or share. See [toImage].
+  Future<Uint8List> toPngBytes({double pixelRatio = 1}) async {
+    final image = await toImage(pixelRatio: pixelRatio);
+    try {
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      return bytes!.buffer.asUint8List();
+    } finally {
+      image.dispose();
+    }
+  }
+
   /// Shows the regions one level below [region], inside it: a province's
   /// districts or a district's local levels. Does nothing for a local level.
   Future<void> drillDown(Region region) async {
@@ -155,7 +181,7 @@ class NepalMapController extends ChangeNotifier {
     _selection.value = Set.unmodifiable(regions);
   }
 
-  void _setView(MapScope view) {
+  void _setView(MapView view) {
     if (view == _view) return;
     _view = view;
     notifyListeners();
@@ -196,7 +222,7 @@ extension NepalMapControllerInternals on NepalMapController {
   /// Sets the view without notifying, e.g. from the widget's properties
   /// during build. Returns whether it changed; if so, call
   /// [notifyScopeAdopted] after the frame.
-  bool adoptScope(MapScope view) {
+  bool adoptScope(MapView view) {
     if (view == _view) return false;
     _view = view;
     return true;

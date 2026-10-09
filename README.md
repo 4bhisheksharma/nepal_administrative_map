@@ -166,6 +166,31 @@ levels, with hatching and labels. For your own drawing, extend `MapLayer`
 and pass it in `extraLayers`; see the `MapLayer` docs and
 `example/lib/city_glow_layer.dart`.
 
+### Accessibility and keyboard
+
+- Screen readers (TalkBack, VoiceOver) get one node per region on screen,
+  read in the active language with its parent and choropleth value
+  (e.g. "Kaski District, Gandaki Province, Area: 2,032"), and can select or
+  drill into it.
+- Keyboard: Tab / Shift-Tab step through regions, arrow keys move to the
+  neighbour in that direction, Enter or Space selects (or drills down), Esc
+  goes back up, `+` / `-` zoom. The focused region gets a focus ring
+  (`NepalMapTheme.focusOutline`) and its tooltip.
+- `MediaQuery.disableAnimations` (reduced motion) turns off every animation.
+
+### Export
+
+```dart
+final png = await controller.toPngBytes(pixelRatio: 2);  // legend and credit included
+final image = await controller.toImage();                // a dart:ui Image
+```
+
+### Animations
+
+Drill-down and `zoomTo` fly the camera (`animationDuration`,
+`animationCurve`), a fast pan keeps gliding after release, the map fades in
+when its data loads, and choropleth colours blend when the values change.
+
 ### Selection
 
 `selectionMode` is `single` (default), `multi` or `none`. The map keeps its
@@ -249,3 +274,29 @@ The map shows a small credit line by default. If you hide it
 (`showAttribution: false`), credit the data elsewhere in your app, for
 example on an About screen, using `NepalMap.attribution` and
 `NepalMap.attributionUrl`.
+
+## FAQ
+
+**Nepali labels show boxes or look wrong.** The package doesn't bundle a
+font. Android, iOS, macOS and Windows have Devanagari system fonts, and
+Flutter web downloads Noto fonts as needed. For the same look everywhere,
+set `NepalMapTheme.labelStyle: TextStyle(fontFamily: ...)`, e.g. with
+`google_fonts`' Noto Sans Devanagari.
+
+**Some local levels show English names in Nepali mode.** Nepali names of
+the 753 local levels are still being added (province, district and type
+names are complete). Until then those labels fall back to English.
+
+**Does it work offline / on the web?** Yes. All data is bundled (422 KB), and
+there are no network calls. On the web, decoding runs on the main thread
+(about 30 ms) since there are no isolates.
+
+**How big is it?** One 422 KB asset (about 146 KB compressed in the app
+bundle) and no dependencies besides Flutter.
+
+**Where does the data come from, and can I update it?** OKNP
+LocalBoundaries (CC BY 4.0). `tool/build_data.dart` rebuilds everything from
+the raw download; see `tool/README.md`.
+
+**How fast is it?** See the benchmark (`flutter test --tags benchmark`):
+pan and zoom frames take a few milliseconds of CPU, even at the local level.

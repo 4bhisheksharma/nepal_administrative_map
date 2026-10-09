@@ -63,6 +63,7 @@ class GeometryCache {
   final _borders = <MapView, BorderPaths>{};
   final _visible = <MapView, List<Region>>{};
   final _anchors = <Region, LabelAnchor>{};
+  final _planeBounds = <Region, Rect>{};
   final _byArea = <MapView, List<Region>>{};
 
   /// Regions shown for [view], in code order.
@@ -104,8 +105,12 @@ class GeometryCache {
   /// Plane rectangle to fit for [view].
   Rect contentRect(MapView view) => switch (view.scope) {
     null => plane.rect,
-    final scope => plane.rectOf(data.shapeOf(scope).bounds),
+    final scope => planeBounds(scope),
   };
+
+  /// Bounding box of [region] in plane units.
+  Rect planeBounds(Region region) =>
+      _planeBounds[region] ??= plane.rectOf(data.shapeOf(region).bounds);
 
   /// Fill path of [region] (even-odd, so holes stay empty).
   Path pathOf(Region region) =>

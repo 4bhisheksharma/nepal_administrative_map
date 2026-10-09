@@ -43,6 +43,7 @@ Future<void> pumpMap(
 Future<void> settleData(WidgetTester tester) async {
   await tester.runAsync(() => Future<void>.delayed(Duration.zero));
   await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300)); // fade-in
 }
 
 /// Where [point] is drawn on a map at [mapSize] with the default padding.

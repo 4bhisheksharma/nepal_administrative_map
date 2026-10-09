@@ -14,7 +14,7 @@ void main() {
         of: find.byType(NepalMap),
         matching: find.byType(CustomPaint),
       ),
-      findsNWidgets(4),
+      findsNWidgets(5), // 4 layers + the screen-reader painter
     );
     expect(find.bySemanticsLabel('Nepal'), findsOneWidget);
     expect(tester.takeException(), isNull);

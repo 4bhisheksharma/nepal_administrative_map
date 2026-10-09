@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import '../../data/models/region.dart';
 import '../geometry_cache.dart';
 import '../map_layer.dart';
 
@@ -45,15 +46,12 @@ class LabelLayer extends MapLayer {
     Rect bounds,
   ) {
     final placed = <({Object feature, Rect rect, MapLabel label})>[];
-    final cache = context.cache;
-    final candidates = <(Object, String, LabelAnchor)>[
-      for (final MapEntry(key: region, value: text) in context.labels.entries)
-        (region, text, cache.labelAnchor(region)),
-      for (final MapEntry(key: area, value: text)
-          in context.protectedAreaLabels.entries)
-        (area, text, cache.protectedAreaAnchor(area)),
-    ]..sort((a, b) => b.$3.area.compareTo(a.$3.area));
-
+    final candidates = cache.candidates(context);
+    cache.prepare(
+      context.labelStyle,
+      context.theme.labelColor,
+      context.theme.labelHaloColor,
+    );
     final transform = context.transform;
     for (final (feature, text, anchor) in candidates) {
       final radius = anchor.radius * transform.scale;
@@ -61,13 +59,7 @@ class LabelLayer extends MapLayer {
       final center = transform.toScreen(anchor.point);
       if (!bounds.contains(center)) continue;
 
-      final label = this.cache.layout(
-        feature,
-        text,
-        context.labelStyle,
-        context.theme.labelColor,
-        context.theme.labelHaloColor,
-      );
+      final label = cache.layout(feature, text);
       final size = label.size;
       if (size.width / 2 > radius * _fitWidth ||
           size.height / 2 > radius * _fitHeight) {
@@ -154,35 +146,64 @@ class MapLabel {
   )..layout();
 }
 
-/// Laid-out labels keyed by region. Text is measured once and reused until
-/// the region's text or the label style changes, e.g. on a language switch.
+/// Laid-out labels and placement order, reused between frames.
+///
+/// Text is measured once per region and reused until its text or the label
+/// style changes (e.g. on a language switch). The candidate list, sorted
+/// largest shape first, is rebuilt only when the label texts change.
 class LabelCache {
   final _labels = <Object, MapLabel>{};
+  TextStyle? _style;
+  Color? _color;
+  Color? _halo;
+  Map<Region, String>? _labelsFor;
+  Map<ProtectedArea, String>? _areaLabelsFor;
+  List<(Object, String, LabelAnchor)> _candidates = const [];
 
   /// Number of labels laid out since creation. For tests.
   @visibleForTesting
   int layoutCount = 0;
 
-  /// The laid-out label for [region], reusing the cached one if nothing
-  /// changed.
-  MapLabel layout(
-    Object region,
-    String text,
-    TextStyle style,
-    Color color,
-    Color halo,
-  ) {
-    final cached = _labels[region];
-    if (cached != null &&
-        cached.text == text &&
-        cached.style == style &&
-        cached.color == color &&
-        cached.halo == halo) {
-      return cached;
+  /// Region and protected-area labels with their anchors, largest first.
+  List<(Object, String, LabelAnchor)> candidates(MapPaintContext context) {
+    if (identical(context.labels, _labelsFor) &&
+        identical(context.protectedAreaLabels, _areaLabelsFor)) {
+      return _candidates;
     }
+    _labelsFor = context.labels;
+    _areaLabelsFor = context.protectedAreaLabels;
+    final geometry = context.cache;
+    return _candidates = [
+      for (final MapEntry(key: region, value: text) in context.labels.entries)
+        (region, text, geometry.labelAnchor(region)),
+      for (final MapEntry(key: area, value: text)
+          in context.protectedAreaLabels.entries)
+        (area, text, geometry.protectedAreaAnchor(area)),
+    ]..sort((a, b) => b.$3.area.compareTo(a.$3.area));
+  }
+
+  /// Sets the style for this frame; laid-out labels are dropped if it
+  /// changed.
+  void prepare(TextStyle style, Color color, Color halo) {
+    if (identical(style, _style) ||
+        (style == _style && color == _color && halo == _halo)) {
+      _style = style;
+      return;
+    }
+    dispose();
+    _style = style;
+    _color = color;
+    _halo = halo;
+  }
+
+  /// The laid-out label for [feature], reusing the cached one if its text
+  /// is unchanged. Call [prepare] first.
+  MapLabel layout(Object feature, String text) {
+    final cached = _labels[feature];
+    if (cached != null && cached.text == text) return cached;
     cached?.dispose();
     layoutCount++;
-    return _labels[region] = MapLabel(text, style, color, halo);
+    return _labels[feature] = MapLabel(text, _style!, _color!, _halo!);
   }
 
   /// Releases every laid-out label.

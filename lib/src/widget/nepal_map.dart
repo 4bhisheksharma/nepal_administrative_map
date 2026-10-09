@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
@@ -22,6 +24,7 @@ import '../rendering/layers/region_fill_layer.dart';
 import '../rendering/map_camera.dart';
 import '../rendering/map_layer.dart';
 import '../rendering/map_plane.dart';
+import '../rendering/region_semantics.dart';
 import '../rendering/style/nepal_map_theme.dart';
 import '../rendering/style/region_style.dart';
 import 'choropleth.dart';
@@ -112,6 +115,7 @@ class NepalMap extends StatefulWidget {
     this.minZoom = 1,
     this.maxZoom = 40,
     this.animationDuration = const Duration(milliseconds: 400),
+    this.animationCurve = Curves.easeInOutCubic,
     this.theme,
     this.padding = const EdgeInsets.all(8),
     this.placeholder,
@@ -217,6 +221,9 @@ class NepalMap extends StatefulWidget {
   /// the platform asks for reduced motion.
   final Duration animationDuration;
 
+  /// Easing of zoom and drill-down animations.
+  final Curve animationCurve;
+
   /// Colours and line widths. Defaults to [NepalMapTheme.of].
   final NepalMapTheme? theme;
 
@@ -268,7 +275,7 @@ class NepalMap extends StatefulWidget {
 }
 
 class _NepalMapState extends State<NepalMap>
-    with SingleTickerProviderStateMixin
+    with TickerProviderStateMixin
     implements NepalMapDelegate {
   late Future<NepalMapData> _data;
   NepalMapController? _ownController;
@@ -276,7 +283,7 @@ class _NepalMapState extends State<NepalMap>
 
   /// The view being drawn. Trails the controller's view by one rebuild so a
   /// scope change can animate from where the camera was.
-  MapScope? _shownView;
+  MapView? _shownView;
 
   /// The camera; `null` means "fit the view".
   MapCamera? _camera;
@@ -294,6 +301,28 @@ class _NepalMapState extends State<NepalMap>
   Size _size = Size.zero;
 
   Region? _hovered;
+  Region? _focused;
+  final _boundaryKey = GlobalKey();
+  Curve? _flightCurveOverride;
+
+  // Colour transition when the choropleth changes.
+  late final AnimationController _fillController = AnimationController(
+    vsync: this,
+    duration: _fillDuration,
+  )..addListener(_rebuild);
+  // Per-region styles and labels, reused while their inputs are unchanged
+  // (e.g. every frame of a pan), so layers can skip work by identity.
+  Object? _stylesKey;
+  Map<Region, RegionStyle> _styles = const {};
+  Object? _labelsKey;
+  (Map<Region, String>, Map<ProtectedArea, String>) _labels = (
+    const {},
+    const {},
+  );
+
+  Map<Region, Color> _fillFrom = const {};
+  Map<Region, Color> _lastFills = const {};
+  static const _fillDuration = Duration(milliseconds: 300);
   ({Region region, Offset anchor})? _tooltip;
   ({MapCamera camera, Offset focalPlane})? _gestureStart;
   ({Duration time, Offset position})? _lastTap;
@@ -307,7 +336,7 @@ class _NepalMapState extends State<NepalMap>
   static const _doubleTapTime = Duration(milliseconds: 300);
   static const _doubleTapSlop = 40.0;
 
-  MapScope get _widgetView => (level: widget.level, scope: widget.scope);
+  MapView get _widgetView => (level: widget.level, scope: widget.scope);
 
   @override
   void initState() {
@@ -315,6 +344,8 @@ class _NepalMapState extends State<NepalMap>
     _data = NepalMapData.load(widget.dataSource);
     if (widget.controller == null) _ownController = NepalMapController();
     _attach(_controller);
+    _focusNode.addListener(_rebuild);
+    FocusManager.instance.addHighlightModeListener(_onHighlightMode);
   }
 
   @override
@@ -322,6 +353,13 @@ class _NepalMapState extends State<NepalMap>
     super.didUpdateWidget(old);
     if (old.dataSource.cacheKey != widget.dataSource.cacheKey) {
       _data = NepalMapData.load(widget.dataSource);
+    }
+    if (old.choropleth != widget.choropleth &&
+        _lastFills.isNotEmpty &&
+        !_reduceMotion) {
+      // Fade from the colours on screen to the new data's colours.
+      _fillFrom = _lastFills;
+      _fillController.forward(from: 0);
     }
     final oldController = old.controller ?? _ownController!;
     if (widget.controller != old.controller) {
@@ -357,6 +395,8 @@ class _NepalMapState extends State<NepalMap>
   void dispose() {
     _ownController?.dispose();
     _flightController.dispose();
+    _fillController.dispose();
+    FocusManager.instance.removeHighlightModeListener(_onHighlightMode);
     _flightDone?.complete();
     _focusNode.dispose();
     for (final r in _recordings) {
@@ -384,7 +424,7 @@ class _NepalMapState extends State<NepalMap>
 
   /// Makes [view] the controller's view without animating. Listeners (e.g. a
   /// breadcrumb) are told after the frame, since this runs during build.
-  void _adoptView(MapScope view) {
+  void _adoptView(MapView view) {
     _shownView = view;
     _camera = null;
     if (_controller.adoptScope(view)) {
@@ -395,6 +435,15 @@ class _NepalMapState extends State<NepalMap>
   }
 
   void _rebuild() => setState(() {});
+
+  void _onHighlightMode(FocusHighlightMode mode) => setState(() {});
+
+  /// Whether to draw the keyboard focus ring: only while the map has focus
+  /// and the keyboard (not touch or mouse) is being used.
+  bool get _showFocus =>
+      _focused != null &&
+      _focusNode.hasFocus &&
+      FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
 
   void _onControllerChanged() {
     final view = (level: _controller.level, scope: _controller.scope);
@@ -436,8 +485,8 @@ class _NepalMapState extends State<NepalMap>
     );
   }
 
-  double get _flightCurve =>
-      Curves.easeInOutCubic.transform(_flightController.value);
+  double get _flightCurve => (_flightCurveOverride ?? widget.animationCurve)
+      .transform(_flightController.value);
 
   ViewTransform _transform(GeometryCache cache) {
     final content = cache.contentRect(_shownView!);
@@ -463,6 +512,8 @@ class _NepalMapState extends State<NepalMap>
     (Offset, double) from,
     (Offset, double) to, {
     required MapCamera? end,
+    Curve? curve,
+    Duration? duration,
   }) {
     _flightDone?.complete();
     _flightDone = null;
@@ -474,9 +525,10 @@ class _NepalMapState extends State<NepalMap>
     }
     _flight = CameraFlight(from, to);
     _flightEnd = end;
+    _flightCurveOverride = curve;
     final done = _flightDone = Completer<void>();
     _flightController
-      ..duration = widget.animationDuration
+      ..duration = duration ?? widget.animationDuration
       ..forward(from: 0);
     return done.future;
   }
@@ -554,6 +606,15 @@ class _NepalMapState extends State<NepalMap>
   }
 
   @override
+  Future<ui.Image> toImage({required double pixelRatio}) {
+    final boundary = _boundaryKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary) {
+      throw StateError('The map has not been laid out yet.');
+    }
+    return boundary.toImage(pixelRatio: pixelRatio);
+  }
+
+  @override
   Future<void> get settled => _flightDone?.future ?? Future.value();
 
   // ---------------------------------------------------------------------------
@@ -591,6 +652,11 @@ class _NepalMapState extends State<NepalMap>
     }
     final region = _regionAt(details.localPosition);
     if (region == null) return;
+    _activate(region);
+  }
+
+  /// What a tap, Enter, or a screen reader's activate does to [region].
+  void _activate(Region region) {
     widget.onRegionTap?.call(region);
     if (widget.drillDown && region.level != AdminLevel.localLevel) {
       unawaited(_controller.drillDown(region));
@@ -695,7 +761,40 @@ class _NepalMapState extends State<NepalMap>
     });
   }
 
-  void _onScaleEnd(ScaleEndDetails details) => _gestureStart = null;
+  void _onScaleEnd(ScaleEndDetails details) {
+    final start = _gestureStart;
+    _gestureStart = null;
+    final cache = _cache;
+    final velocity = details.velocity.pixelsPerSecond;
+    // Fling: keep a fast pan gliding to a stop.
+    if (start == null ||
+        cache == null ||
+        velocity.distance < _flingMinVelocity) {
+      return;
+    }
+    final content = cache.contentRect(_shownView!);
+    final camera = _currentCamera(cache);
+    final scale = _fitScale(content) * camera.zoom;
+    final target = MapCamera(
+      center: camera.center - velocity * _flingSeconds / scale,
+      zoom: camera.zoom,
+    ).clamp(content, widget.minZoom, widget.maxZoom);
+    if (_reduceMotion) return;
+    unawaited(
+      _fly(
+        (camera.center, scale),
+        (target.center, scale),
+        end: target,
+        curve: Curves.decelerate,
+        duration: const Duration(milliseconds: 600),
+      ),
+    );
+  }
+
+  static const _flingMinVelocity = 300.0;
+
+  /// How far a fling glides: this many seconds of the release velocity.
+  static const _flingSeconds = 0.3;
 
   void _onHover(PointerHoverEvent event) {
     final region = _regionAt(event.localPosition);
@@ -732,13 +831,105 @@ class _NepalMapState extends State<NepalMap>
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.escape &&
-        _controller.scope != null) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final cache = _cache;
+    if (cache == null) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    final regions = cache.regions(_shownView!);
+
+    if (key == LogicalKeyboardKey.escape) {
+      if (_controller.scope == null) return KeyEventResult.ignored;
       unawaited(_controller.drillUp());
       return KeyEventResult.handled;
     }
+    if (key == LogicalKeyboardKey.tab) {
+      // Step through regions; past either end, let focus leave the map.
+      final step = HardwareKeyboard.instance.isShiftPressed ? -1 : 1;
+      final i = _focused == null
+          ? (step > 0 ? 0 : regions.length - 1)
+          : regions.indexOf(_focused!) + step;
+      if (i < 0 || i >= regions.length) {
+        _setFocused(null);
+        return KeyEventResult.ignored;
+      }
+      _setFocused(regions[i]);
+      return KeyEventResult.handled;
+    }
+    final direction = switch (key) {
+      LogicalKeyboardKey.arrowLeft => const Offset(-1, 0),
+      LogicalKeyboardKey.arrowRight => const Offset(1, 0),
+      LogicalKeyboardKey.arrowUp => const Offset(0, -1),
+      LogicalKeyboardKey.arrowDown => const Offset(0, 1),
+      _ => null,
+    };
+    if (direction != null) {
+      _setFocused(
+        _focused == null
+            ? cache.regionsByArea(_shownView!).first
+            : _neighbour(cache, _focused!, direction),
+      );
+      return KeyEventResult.handled;
+    }
+    if ((key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) &&
+        _focused != null) {
+      _activate(_focused!);
+      return KeyEventResult.handled;
+    }
+    if (widget.interactive &&
+        (key == LogicalKeyboardKey.equal || key == LogicalKeyboardKey.add)) {
+      unawaited(zoomBy(2, animate: true));
+      return KeyEventResult.handled;
+    }
+    if (widget.interactive && key == LogicalKeyboardKey.minus) {
+      unawaited(zoomBy(0.5, animate: true));
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
+  }
+
+  /// The region whose label anchor is nearest to [from]'s in [direction]
+  /// (within 60° of it), or [from] if there is none.
+  Region _neighbour(GeometryCache cache, Region from, Offset direction) {
+    final origin = cache.labelAnchor(from).point;
+    Region? best;
+    var bestScore = double.infinity;
+    for (final region in cache.regions(_shownView!)) {
+      if (region == from) continue;
+      final delta = cache.labelAnchor(region).point - origin;
+      final along = delta.dx * direction.dx + delta.dy * direction.dy;
+      final across = (delta.dx * direction.dy - delta.dy * direction.dx).abs();
+      if (along <= 0 || across > along * 1.73) continue; // outside ±60°
+      final score = along + across * 2;
+      if (score < bestScore) {
+        best = region;
+        bestScore = score;
+      }
+    }
+    return best ?? from;
+  }
+
+  /// Moves keyboard focus to [region], shows its tooltip, and pans to it if
+  /// it's off screen.
+  void _setFocused(Region? region) {
+    final cache = _cache;
+    setState(() {
+      _focused = region;
+      _tooltip = null;
+    });
+    if (region == null || cache == null) return;
+    final anchor = _transform(cache).toScreen(cache.labelAnchor(region).point);
+    final viewport = widget.padding.deflateRect(Offset.zero & _size);
+    if (!viewport.contains(anchor)) {
+      final camera = _currentCamera(cache);
+      unawaited(
+        _flyTo(
+          MapCamera(center: cache.labelAnchor(region).point, zoom: camera.zoom),
+          animate: true,
+        ),
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -819,40 +1010,23 @@ class _NepalMapState extends State<NepalMap>
     final labelMode =
         widget.labelMode ??
         (language == MapLanguage.ne ? LabelMode.ne : LabelMode.en);
+    final labels = _memoLabels(cache, view, regions, labelMode, language);
     final paintContext = MapPaintContext(
       cache: cache,
       view: view,
       transform: transform,
       theme: theme,
       language: language,
-      styles: {
-        for (final region in regions)
-          region: styleOf(
-            region,
-            RegionState(
-              isSelected: selection.contains(region),
-              isHovered: region == _hovered,
-              isHighlighted: highlighted.contains(region),
-              value: choropleth?.values[region],
-            ),
-          ),
-      },
-      labels: {
-        if (labelMode != LabelMode.none || widget.labelBuilder != null)
-          for (final region in regions)
-            if (_labelText(region, labelMode, language) case final text?)
-              region: text,
-      },
-      protectedAreaLabels: {
-        if (widget.showProtectedAreas && labelMode != LabelMode.none)
-          for (final area in cache.protectedAreasIn(view.scope))
-            area: switch (labelMode) {
-              LabelMode.both =>
-                '${area.fullName(MapLanguage.en)}\n${area.fullName(MapLanguage.ne)}',
-              LabelMode.ne => area.fullName(MapLanguage.ne),
-              _ => area.fullName(MapLanguage.en),
-            },
-      },
+      styles: _memoStyles(
+        regions,
+        styleOf,
+        choropleth,
+        theme,
+        selection,
+        highlighted,
+      ),
+      labels: labels.$1,
+      protectedAreaLabels: labels.$2,
       labelStyle: DefaultTextStyle.of(context).style
           .merge(const TextStyle(fontSize: 11, fontWeight: FontWeight.w500))
           .merge(theme.labelStyle),
@@ -872,9 +1046,30 @@ class _NepalMapState extends State<NepalMap>
       _recordings.add(LayerRecording());
     }
 
+    final focusTip = _showFocus && widget.showTooltips
+        ? (
+            region: _focused!,
+            anchor: transform.toScreen(cache.labelAnchor(_focused!).point),
+          )
+        : null;
+    final tooltip = _tooltip ?? focusTip;
     Widget map = Stack(
       fit: StackFit.expand,
       children: [
+        if (SemanticsBinding.instance.semanticsEnabled)
+          CustomPaint(
+            painter: RegionSemanticsPainter(
+              cache: cache,
+              view: view,
+              transform: transform,
+              labels: {
+                for (final r in regions)
+                  r: _semanticLabel(r, language, choropleth),
+              },
+              selection: selection,
+              onActivate: _activate,
+            ),
+          ),
         for (final (i, layer) in layers.indexed)
           RepaintBoundary(
             child: CustomPaint(
@@ -903,7 +1098,7 @@ class _NepalMapState extends State<NepalMap>
               ),
             ),
           ),
-        if (_tooltip case final tip?)
+        if (tooltip case final tip?)
           IgnorePointer(
             child: CustomSingleChildLayout(
               delegate: RegionTooltipPositionDelegate(tip.anchor),
@@ -932,6 +1127,8 @@ class _NepalMapState extends State<NepalMap>
       ],
     );
 
+    map = RepaintBoundary(key: _boundaryKey, child: map);
+
     map = _TapWithTime(
       onTapUp: _onTapUp,
       child: GestureDetector(
@@ -944,26 +1141,151 @@ class _NepalMapState extends State<NepalMap>
       ),
     );
 
-    return Semantics(
-      container: true,
-      label: view.scope?.fullName(language) ?? strings.country,
-      child: Focus(
-        focusNode: _focusNode,
-        onKeyEvent: _onKey,
-        child: Listener(
-          onPointerDown: _onPointerDown,
-          onPointerSignal: _onPointerSignal,
-          child: MouseRegion(
-            cursor: _hovered != null
-                ? SystemMouseCursors.click
-                : MouseCursor.defer,
-            onHover: _onHover,
-            onExit: _onExit,
-            child: map,
+    return _FadeIn(
+      enabled: !_reduceMotion,
+      child: Semantics(
+        container: true,
+        label: view.scope?.fullName(language) ?? strings.country,
+        child: Focus(
+          focusNode: _focusNode,
+          onKeyEvent: _onKey,
+          child: Listener(
+            onPointerDown: _onPointerDown,
+            onPointerSignal: _onPointerSignal,
+            child: MouseRegion(
+              cursor: _hovered != null
+                  ? SystemMouseCursors.click
+                  : MouseCursor.defer,
+              onHover: _onHover,
+              onExit: _onExit,
+              child: map,
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Map<Region, RegionStyle> _memoStyles(
+    List<Region> regions,
+    RegionStyleBuilder styleOf,
+    Choropleth? choropleth,
+    NepalMapTheme theme,
+    Set<Region> selection,
+    Set<Region> highlighted,
+  ) {
+    final focused = _showFocus ? _focused : null;
+    final transition = _fillController.isAnimating
+        ? _fillController.value
+        : null;
+    final key = (
+      regions,
+      widget.style,
+      choropleth,
+      theme,
+      selection,
+      highlighted,
+      _hovered,
+      focused,
+      transition,
+    );
+    if (key == _stylesKey) return _styles;
+    _stylesKey = key;
+    return _styles = _transitionFills({
+      for (final region in regions)
+        region: styleOf(
+          region,
+          RegionState(
+            isSelected: selection.contains(region),
+            isHovered: region == _hovered,
+            isHighlighted: highlighted.contains(region),
+            isFocused: region == focused,
+            value: choropleth?.values[region],
+          ),
+        ),
+    });
+  }
+
+  (Map<Region, String>, Map<ProtectedArea, String>) _memoLabels(
+    GeometryCache cache,
+    MapView view,
+    List<Region> regions,
+    LabelMode labelMode,
+    MapLanguage language,
+  ) {
+    final key = (
+      view,
+      labelMode,
+      language,
+      widget.labelBuilder,
+      widget.showProtectedAreas,
+    );
+    if (key == _labelsKey) return _labels;
+    _labelsKey = key;
+    return _labels = (
+      {
+        if (labelMode != LabelMode.none || widget.labelBuilder != null)
+          for (final region in regions)
+            if (_labelText(region, labelMode, language) case final text?)
+              region: text,
+      },
+      {
+        if (widget.showProtectedAreas && labelMode != LabelMode.none)
+          for (final area in cache.protectedAreasIn(view.scope))
+            area: switch (labelMode) {
+              LabelMode.both =>
+                '${area.fullName(MapLanguage.en)}\n${area.fullName(MapLanguage.ne)}',
+              LabelMode.ne => area.fullName(MapLanguage.ne),
+              _ => area.fullName(MapLanguage.en),
+            },
+      },
+    );
+  }
+
+  /// While the colour transition runs, blends each region's fill from the
+  /// colour it had to its new one. Remembers the fills for the next change.
+  Map<Region, RegionStyle> _transitionFills(Map<Region, RegionStyle> targets) {
+    var styles = targets;
+    if (_fillController.isAnimating) {
+      final t = Curves.easeInOut.transform(_fillController.value);
+      styles = {
+        for (final MapEntry(key: region, value: style) in targets.entries)
+          region: switch (_fillFrom[region]) {
+            final from? => style.copyWith(
+              fill: Color.lerp(from, style.fill, t),
+            ),
+            null => style,
+          },
+      };
+    }
+    _lastFills = {
+      for (final MapEntry(:key, :value) in styles.entries) key: value.fill,
+    };
+    return styles;
+  }
+
+  /// What a screen reader says for [region]: its full name and parent, plus
+  /// its value on a choropleth map.
+  String _semanticLabel(
+    Region region,
+    MapLanguage language,
+    Choropleth? choropleth,
+  ) {
+    final parent = switch (region) {
+      Province() => null,
+      District(:final province) => province.fullName(language),
+      LocalLevel(:final district) => district.fullName(language),
+    };
+    final value = choropleth?.values[region];
+    return [
+      region.fullName(language),
+      ?parent,
+      if (value != null)
+        [
+          ?choropleth!.title?.of(language),
+          choropleth.format(value, language),
+        ].join(': '),
+    ].join(', ');
   }
 
   /// A widget marker positioned so its [MapMarker.alignment] point sits on
@@ -1051,6 +1373,26 @@ class _Attribution extends StatelessWidget {
               cursor: SystemMouseCursors.click,
               child: GestureDetector(onTap: onTap, child: text),
             ),
+    );
+  }
+}
+
+/// Fades the map in once, when its data first appears.
+class _FadeIn extends StatelessWidget {
+  const _FadeIn({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 250),
+      builder: (context, opacity, child) =>
+          Opacity(opacity: opacity, child: child),
+      child: child,
     );
   }
 }

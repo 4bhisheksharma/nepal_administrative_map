@@ -396,6 +396,23 @@ class _ZoomButtons extends StatelessWidget {
           icon: const Icon(Icons.center_focus_strong),
           onPressed: controller.resetView,
         ),
+        IconButton(
+          tooltip: 'Export PNG',
+          icon: const Icon(Icons.image_outlined),
+          onPressed: () async {
+            final png = await controller.toPngBytes(pixelRatio: 2);
+            if (!context.mounted) return;
+            await showDialog<void>(
+              context: context,
+              builder: (context) => Dialog(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Image.memory(png, width: 480),
+                ),
+              ),
+            );
+          },
+        ),
       ],
     ),
   );

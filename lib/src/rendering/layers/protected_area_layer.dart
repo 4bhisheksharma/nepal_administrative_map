@@ -56,6 +56,6 @@ class ProtectedAreaLayer extends MapLayer {
   @override
   bool needsRepaint(MapPaintContext old, MapPaintContext current) =>
       old.view != current.view ||
-      old.transform.scale != current.transform.scale ||
+      current.scaleDiffers(old) ||
       old.theme.protectedAreaOverlay != current.theme.protectedAreaOverlay;
 }

@@ -126,12 +126,36 @@ class Choropleth {
       }
       return RegionStyle(
         fill: fill,
-        outline: state.isSelected
+        outline: state.isFocused
+            ? theme.focusOutline
+            : state.isSelected
             ? theme.selectedOutline
             : state.isHighlighted
             ? theme.highlightOutline
             : null,
+        outlineWidth: state.isFocused ? 3 : 2,
       );
     };
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is Choropleth &&
+      mapEquals(other.values, values) &&
+      other.scale == scale &&
+      other.title == title &&
+      other.formatter == formatter &&
+      other.grouping == grouping &&
+      other.showLegend == showLegend &&
+      other.legendAlignment == legendAlignment;
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAllUnordered(values.keys),
+    scale,
+    title,
+    grouping,
+    showLegend,
+    legendAlignment,
+  );
 }

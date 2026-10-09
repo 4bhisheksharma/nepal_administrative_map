@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 import 'package:nepal_administrative_map/nepal_administrative_map.dart';
 
 import 'test_helpers.dart';
@@ -464,21 +465,27 @@ void main() {
       expect(controller.isAttached, isTrue);
     });
 
-    testWidgets('one controller cannot drive two maps', (tester) async {
-      await loadData(tester);
-      final controller = NepalMapController();
-      addTearDown(controller.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Column(
-            children: [
-              Expanded(child: NepalMap(controller: controller)),
-              Expanded(child: NepalMap(controller: controller)),
-            ],
+    testWidgets(
+      'one controller cannot drive two maps',
+      (tester) async {
+        await loadData(tester);
+        final controller = NepalMapController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Column(
+              children: [
+                Expanded(child: NepalMap(controller: controller)),
+                Expanded(child: NepalMap(controller: controller)),
+              ],
+            ),
           ),
-        ),
-      );
-      expect(tester.takeException(), isAssertionError);
-    });
+        );
+        expect(tester.takeException(), isAssertionError);
+      },
+      // The second map throws during initState, so the framework never
+      // disposes it: expected for this test, not a real leak.
+      experimentalLeakTesting: LeakTesting.settings.withIgnoredAll(),
+    );
   });
 }

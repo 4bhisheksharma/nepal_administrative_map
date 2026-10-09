@@ -25,6 +25,7 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     required this.selectedFill,
     required this.selectedOutline,
     required this.highlightOutline,
+    required this.focusOutline,
     required this.borderColor,
     required this.parentBorderColor,
     required this.outlineColor,
@@ -50,6 +51,7 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     selectedFill: scheme.primaryContainer,
     selectedOutline: scheme.primary,
     highlightOutline: scheme.tertiary,
+    focusOutline: scheme.onSurface,
     borderColor: scheme.surface,
     parentBorderColor: scheme.outline,
     outlineColor: scheme.outline,
@@ -84,6 +86,9 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
 
   /// Outline of regions highlighted with `NepalMapController.highlight`.
   final Color highlightOutline;
+
+  /// Outline of the region focused with the keyboard.
+  final Color focusOutline;
 
   /// Borders between regions at the shown level.
   final Color borderColor;
@@ -138,11 +143,14 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
         : state.isHovered
         ? hoverFill
         : regionFill,
-    outline: state.isSelected
+    outline: state.isFocused
+        ? focusOutline
+        : state.isSelected
         ? selectedOutline
         : state.isHighlighted
         ? highlightOutline
         : null,
+    outlineWidth: state.isFocused ? 3 : 2,
   );
 
   @override
@@ -152,6 +160,7 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     Color? selectedFill,
     Color? selectedOutline,
     Color? highlightOutline,
+    Color? focusOutline,
     Color? borderColor,
     Color? parentBorderColor,
     Color? outlineColor,
@@ -171,6 +180,7 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     selectedFill: selectedFill ?? this.selectedFill,
     selectedOutline: selectedOutline ?? this.selectedOutline,
     highlightOutline: highlightOutline ?? this.highlightOutline,
+    focusOutline: focusOutline ?? this.focusOutline,
     borderColor: borderColor ?? this.borderColor,
     parentBorderColor: parentBorderColor ?? this.parentBorderColor,
     outlineColor: outlineColor ?? this.outlineColor,
@@ -197,6 +207,7 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
       selectedFill: c(selectedFill, other.selectedFill),
       selectedOutline: c(selectedOutline, other.selectedOutline),
       highlightOutline: c(highlightOutline, other.highlightOutline),
+      focusOutline: c(focusOutline, other.focusOutline),
       borderColor: c(borderColor, other.borderColor),
       parentBorderColor: c(parentBorderColor, other.parentBorderColor),
       outlineColor: c(outlineColor, other.outlineColor),
@@ -225,6 +236,7 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
       other.selectedFill == selectedFill &&
       other.selectedOutline == selectedOutline &&
       other.highlightOutline == highlightOutline &&
+      other.focusOutline == focusOutline &&
       other.borderColor == borderColor &&
       other.parentBorderColor == parentBorderColor &&
       other.outlineColor == outlineColor &&
@@ -246,6 +258,7 @@ class NepalMapTheme extends ThemeExtension<NepalMapTheme> {
     selectedFill,
     selectedOutline,
     highlightOutline,
+    focusOutline,
     borderColor,
     parentBorderColor,
     outlineColor,

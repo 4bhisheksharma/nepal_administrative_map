@@ -1,5 +1,18 @@
 ## Unreleased
 
+* Accessibility: a screen-reader node per visible region (name, parent and
+  value in the active language, with a tap action); keyboard navigation
+  (Tab, arrow keys, Enter/Space, Esc, `+`/`-`) with a focus ring
+  (`NepalMapTheme.focusOutline`, `RegionState.isFocused`).
+* Export: `NepalMapController.toImage()` and `toPngBytes()`.
+* Animations: fade-in on load, choropleth colour transitions, pan momentum
+  (fling), `animationCurve`; all off with reduced motion.
+* Performance: label placement reuses its sorted candidates and laid-out
+  text (local-level pan frames 5 → 0.6 ms in the benchmark); borders
+  re-record only after a 15% zoom change; per-region styles and labels are
+  memoised. `MapPaintContext.scaleDiffers` for custom layers.
+* `RegionStyle.copyWith`; scales and `Choropleth` have value equality.
+* Widget tests run with leak tracking.
 * Choropleth maps: `Choropleth` (also `Choropleth.byCode`) with
   `ColorScale.sequential`, `diverging`, `threshold` and `categorical`,
   interpolated in OKLab; `RegionState.value`; values in tooltips;

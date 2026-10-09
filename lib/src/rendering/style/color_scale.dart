@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import '../../i18n/localized_name.dart';
@@ -89,6 +90,16 @@ final class SequentialScale extends ColorScale {
     final d = domain ?? extent;
     return lerpOklab(from, to, _fraction(value, d.min, d.max));
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is SequentialScale &&
+      other.from == from &&
+      other.to == to &&
+      other.domain == domain;
+
+  @override
+  int get hashCode => Object.hash(from, to, domain);
 }
 
 /// See [ColorScale.diverging].
@@ -132,6 +143,18 @@ final class DivergingScale extends ColorScale {
         ? lerpOklab(low, mid, _fraction(value, d.min, m))
         : lerpOklab(mid, high, _fraction(value, m, d.max));
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is DivergingScale &&
+      other.low == low &&
+      other.mid == mid &&
+      other.high == high &&
+      other.midpoint == midpoint &&
+      other.domain == domain;
+
+  @override
+  int get hashCode => Object.hash(low, mid, high, midpoint, domain);
 }
 
 /// See [ColorScale.threshold].
@@ -163,6 +186,16 @@ final class ThresholdScale extends ColorScale {
     }
     return colors[i];
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ThresholdScale &&
+      listEquals(other.breaks, breaks) &&
+      listEquals(other.colors, colors);
+
+  @override
+  int get hashCode =>
+      Object.hash(Object.hashAll(breaks), Object.hashAll(colors));
 }
 
 /// See [ColorScale.categorical].
@@ -178,6 +211,18 @@ final class CategoricalScale extends ColorScale {
 
   @override
   Color? colorOf(Object? value, ScaleDomain extent) => colors[value];
+
+  @override
+  bool operator ==(Object other) =>
+      other is CategoricalScale &&
+      mapEquals(other.colors, colors) &&
+      mapEquals(other.labels, labels);
+
+  @override
+  int get hashCode => Object.hash(
+    Object.hashAllUnordered(colors.keys),
+    Object.hashAllUnordered(colors.values),
+  );
 }
 
 double _fraction(num value, num min, num max) =>

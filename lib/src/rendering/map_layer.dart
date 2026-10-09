@@ -63,6 +63,15 @@ class MapPaintContext {
 
   /// Screen position of [point], for screen-space layers.
   Offset toScreen(LatLng point) => transform.toScreen(project(point));
+
+  /// Whether the zoom differs from [other]'s by more than [tolerance]
+  /// (15% by default). Layers whose line widths depend on the scale use this
+  /// to re-record only occasionally while zooming; a line drawn up to 15%
+  /// too thin or thick for a moment is invisible.
+  bool scaleDiffers(MapPaintContext other, {double tolerance = 0.15}) {
+    final ratio = transform.scale / other.transform.scale;
+    return ratio > 1 + tolerance || ratio < 1 / (1 + tolerance);
+  }
 }
 
 /// One drawing pass of the map, e.g. fills or borders.

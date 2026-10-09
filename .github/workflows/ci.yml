@@ -21,7 +21,7 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib test tool example/lib example/test
       - run: flutter analyze
       # Goldens depend on the OS's anti-aliasing; run them locally instead.
-      - run: flutter test --exclude-tags golden
+      - run: flutter test --exclude-tags golden,benchmark
       - name: Example app
         working-directory: example
         run: |
